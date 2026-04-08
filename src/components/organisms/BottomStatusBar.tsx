@@ -7,6 +7,7 @@ interface BottomStatusBarProps {
   activeTool: SelectedTool;
   activeMode: BuildMode;
   activeLevelName: string;
+  openingRailConstrainedThresholdM: number;
   isProjectSaved: boolean;
   totalAreaM2: number;
 }
@@ -29,6 +30,7 @@ export function BottomStatusBar({
   activeTool,
   activeMode,
   activeLevelName,
+  openingRailConstrainedThresholdM,
   isProjectSaved,
   totalAreaM2,
 }: BottomStatusBarProps) {
@@ -53,6 +55,10 @@ export function BottomStatusBar({
 
         <span className="rounded-full border border-slate-700/90 bg-slate-900/75 px-3 py-1.5">
           Nivel: {activeLevelName}
+        </span>
+
+        <span className="rounded-full border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-rose-100">
+          Umbral rail: {formatNumber(openingRailConstrainedThresholdM)} m
         </span>
 
         <span

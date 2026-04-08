@@ -34,6 +34,7 @@ export default function Home() {
   const activeMode = useAppStore((state) => state.activeMode);
   const activeLevelId = useAppStore((state) => state.activeLevelId);
   const levels = useAppStore((state) => state.levels);
+  const openingRailConstrainedThresholdM = useAppStore((state) => state.openingRailConstrainedThresholdM);
 
   const [showSavedToast, setShowSavedToast] = useState(false);
 
@@ -184,6 +185,7 @@ export default function Home() {
         activeTool={selectedTool}
         activeMode={activeMode}
         activeLevelName={activeLevelName}
+        openingRailConstrainedThresholdM={openingRailConstrainedThresholdM}
         isProjectSaved={Boolean(currentProject)}
         totalAreaM2={totalArea}
       />
