@@ -146,9 +146,7 @@ export function Scene() {
   const showGrid = useAppStore((state) => state.showGrid);
   const updateWall = useAppStore((state) => state.updateWall);
   const setCameraPosition = useAppStore((state) => state.setCameraPosition);
-  const openingRailConstrainedThresholdM = useAppStore(
-    (state) => state.currentProject?.settings.openingRailConstrainedThresholdM ?? 0.12,
-  );
+  const openingRailConstrainedThresholdM = useAppStore((state) => state.openingRailConstrainedThresholdM);
   const [openingPreview, setOpeningPreview] = useState<{
     wallId: string;
     type: "puerta" | "ventana";

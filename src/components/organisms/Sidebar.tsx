@@ -53,6 +53,8 @@ export function Sidebar({ selectedTool, onSelectTool }: SidebarProps) {
   const setActiveLevel = useAppStore((state) => state.setActiveLevel);
   const toggleLevelVisibility = useAppStore((state) => state.toggleLevelVisibility);
   const addLevel = useAppStore((state) => state.addLevel);
+  const openingRailConstrainedThresholdM = useAppStore((state) => state.openingRailConstrainedThresholdM);
+  const setOpeningRailConstrainedThresholdM = useAppStore((state) => state.setOpeningRailConstrainedThresholdM);
 
   const handleSelectMode = (mode: BuildMode) => {
     setActiveMode(mode);
@@ -147,6 +149,33 @@ export function Sidebar({ selectedTool, onSelectTool }: SidebarProps) {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-xl border border-slate-700/80 bg-slate-900/50 p-3">
+        <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-300">Asistencia de abertura</p>
+        <label className="mb-2 block text-xs text-slate-300">Umbral de límite del muro (m)</label>
+        <input
+          type="range"
+          min={0}
+          max={0.5}
+          step={0.01}
+          value={openingRailConstrainedThresholdM}
+          onChange={(event) => setOpeningRailConstrainedThresholdM(Number(event.target.value))}
+          className="w-full accent-cyan-400"
+        />
+        <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+          <span>0.00</span>
+          <input
+            type="number"
+            min={0}
+            max={0.5}
+            step={0.01}
+            value={openingRailConstrainedThresholdM.toFixed(2)}
+            onChange={(event) => setOpeningRailConstrainedThresholdM(Number(event.target.value))}
+            className="w-16 rounded border border-slate-700 bg-slate-950/50 px-1.5 py-1 text-right text-slate-100"
+          />
+          <span>0.50</span>
         </div>
       </div>
 

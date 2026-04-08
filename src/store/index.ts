@@ -62,10 +62,12 @@ interface UiSlice {
   isDrawingMode: boolean;
   showGrid: boolean;
   cameraPosition: Vector3D;
+  openingRailConstrainedThresholdM: number;
   setSelectedTool: (tool: SelectedTool) => void;
   setIsDrawingMode: (enabled: boolean) => void;
   setShowGrid: (visible: boolean) => void;
   setCameraPosition: (position: Vector3D) => void;
+  setOpeningRailConstrainedThresholdM: (value: number) => void;
 }
 
 interface BuildFlowSlice {
@@ -120,6 +122,7 @@ interface UndoSnapshot {
   isDrawingMode: boolean;
   showGrid: boolean;
   cameraPosition: Vector3D;
+  openingRailConstrainedThresholdM: number;
   activeMode: BuildMode;
   activeBuildSubtool: BuildSubtool;
   activeObjectType: ObjectType;
@@ -239,6 +242,7 @@ const makeSnapshot = (state: StoreState): UndoSnapshot => ({
   isDrawingMode: state.isDrawingMode,
   showGrid: state.showGrid,
   cameraPosition: state.cameraPosition,
+  openingRailConstrainedThresholdM: state.openingRailConstrainedThresholdM,
   activeMode: state.activeMode,
   activeBuildSubtool: state.activeBuildSubtool,
   activeObjectType: state.activeObjectType,
@@ -279,6 +283,7 @@ export const useAppStore = create<StoreState>((set, get) => {
     isDrawingMode: false,
     showGrid: true,
     cameraPosition: defaultCameraPosition,
+    openingRailConstrainedThresholdM: defaultSettings.openingRailConstrainedThresholdM,
     activeMode: "select",
     activeBuildSubtool: "wall",
     activeObjectType: "puerta",
@@ -491,6 +496,27 @@ export const useAppStore = create<StoreState>((set, get) => {
 
     setCameraPosition: (position) => {
       set({ cameraPosition: position });
+    },
+
+    setOpeningRailConstrainedThresholdM: (value) => {
+      applyWithHistory((state) => {
+        const normalized = Math.min(0.5, Math.max(0, value));
+        const currentProject = state.currentProject
+          ? {
+              ...state.currentProject,
+              settings: {
+                ...defaultSettings,
+                ...state.currentProject.settings,
+                openingRailConstrainedThresholdM: normalized,
+              },
+            }
+          : null;
+
+        return {
+          openingRailConstrainedThresholdM: normalized,
+          currentProject,
+        };
+      });
     },
 
     setActiveMode: (mode) => {
@@ -728,6 +754,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         ...defaultSettings,
         ...state.currentProject?.settings,
         showGrid: state.showGrid,
+        openingRailConstrainedThresholdM: state.openingRailConstrainedThresholdM,
       };
 
       const project = buildProject(
@@ -765,6 +792,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         lot: project.lot ?? defaultLot,
         activeLevelId: project.levels?.[0]?.id ?? defaultLevelId,
         showGrid: resolvedSettings.showGrid,
+        openingRailConstrainedThresholdM: resolvedSettings.openingRailConstrainedThresholdM,
         selectedWallId: null,
         selectedOpeningId: null,
         selectedFloorId: null,
@@ -794,6 +822,7 @@ export const useAppStore = create<StoreState>((set, get) => {
           levels: defaultLevels,
           activeLevelId: defaultLevelId,
           lot: defaultLot,
+          openingRailConstrainedThresholdM: defaultSettings.openingRailConstrainedThresholdM,
           selectedWallId: null,
           selectedOpeningId: null,
           selectedFloorId: null,
