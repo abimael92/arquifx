@@ -35,6 +35,51 @@ function PreviewLine({ points }: { points: [number, number, number, number, numb
   );
 }
 
+function OpeningRail({
+  points,
+  start,
+  end,
+  marker,
+}: {
+  points: [number, number, number, number, number, number];
+  start: [number, number, number];
+  end: [number, number, number];
+  marker: [number, number, number];
+}) {
+  const geometry = useMemo(() => {
+    const nextGeometry = new BufferGeometry();
+    nextGeometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3));
+    return nextGeometry;
+  }, [points]);
+
+  useEffect(() => {
+    return () => geometry.dispose();
+  }, [geometry]);
+
+  return (
+    <group>
+      <lineSegments geometry={geometry}>
+        <lineBasicMaterial color="#f59e0b" linewidth={2} />
+      </lineSegments>
+
+      <mesh position={start}>
+        <sphereGeometry args={[0.05, 10, 10]} />
+        <meshStandardMaterial color="#f59e0b" emissive="#78350f" emissiveIntensity={0.4} />
+      </mesh>
+
+      <mesh position={end}>
+        <sphereGeometry args={[0.05, 10, 10]} />
+        <meshStandardMaterial color="#f59e0b" emissive="#78350f" emissiveIntensity={0.4} />
+      </mesh>
+
+      <mesh position={marker}>
+        <sphereGeometry args={[0.045, 10, 10]} />
+        <meshStandardMaterial color="#22d3ee" emissive="#0e7490" emissiveIntensity={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
 function PreviewRectangle({
   points,
 }: {
@@ -251,6 +296,34 @@ export function Scene() {
 
     return null;
   }, [roomPreviewMetrics, selectedTool, wallPreviewMetrics]);
+
+  const openingRail = useMemo<{
+    points: [number, number, number, number, number, number];
+    start: [number, number, number];
+    end: [number, number, number];
+    marker: [number, number, number];
+  } | null>(() => {
+    if (!openingPreview) {
+      return null;
+    }
+
+    const wall = visibleWalls.find((item) => item.id === openingPreview.wallId);
+    if (!wall) {
+      return null;
+    }
+
+    const railY = wall.startPoint.y + Math.max(openingPreview.sillHeight + openingPreview.height * 0.5, 0.1);
+    const start: [number, number, number] = [wall.startPoint.x, railY, wall.startPoint.z];
+    const end: [number, number, number] = [wall.endPoint.x, railY, wall.endPoint.z];
+    const marker: [number, number, number] = [openingPreview.center[0], railY, openingPreview.center[2]];
+
+    return {
+      points: [start[0], start[1], start[2], end[0], end[1], end[2]],
+      start,
+      end,
+      marker,
+    };
+  }, [openingPreview, visibleWalls]);
 
   const openingDefaults = useMemo(() => {
     if (selectedTool === "Puertas") {
@@ -600,6 +673,15 @@ export function Scene() {
               opacity={0.28}
             />
           </mesh>
+        ) : null}
+
+        {openingRail && (isOpeningTool || Boolean(openingDragState)) ? (
+          <OpeningRail
+            points={openingRail.points}
+            start={openingRail.start}
+            end={openingRail.end}
+            marker={openingRail.marker}
+          />
         ) : null}
 
         {previewLinePoints ? <PreviewLine points={previewLinePoints} /> : null}
