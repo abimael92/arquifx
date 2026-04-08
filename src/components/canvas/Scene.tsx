@@ -7,6 +7,7 @@ import { BufferAttribute, BufferGeometry } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { useFloorDetection } from "@/hooks/useFloorDetection";
+import { useRoomDrawing } from "@/hooks/useRoomDrawing";
 import { useWallDrawing } from "@/hooks/useWallDrawing";
 import { useAppStore } from "@/store";
 import { Wall as WallType } from "@/types/project.types";
@@ -30,6 +31,28 @@ function PreviewLine({ points }: { points: [number, number, number, number, numb
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial color="#22d3ee" linewidth={2} />
+    </lineSegments>
+  );
+}
+
+function PreviewRectangle({
+  points,
+}: {
+  points: [number, number, number, number, number, number, number, number, number, number, number, number];
+}) {
+  const geometry = useMemo(() => {
+    const nextGeometry = new BufferGeometry();
+    nextGeometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3));
+    return nextGeometry;
+  }, [points]);
+
+  useEffect(() => {
+    return () => geometry.dispose();
+  }, [geometry]);
+
+  return (
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color="#34d399" linewidth={2} />
     </lineSegments>
   );
 }
@@ -65,7 +88,21 @@ export function Scene() {
 
   useFloorDetection();
 
-  const { previewPoints, onCanvasPointerDown, onCanvasPointerMove, onScenePointerMissed } = useWallDrawing();
+  const {
+    previewPoints,
+    previewMetrics: wallPreviewMetrics,
+    onCanvasPointerDown: onWallPointerDown,
+    onCanvasPointerMove: onWallPointerMove,
+    onCanvasPointerUp: onWallPointerUp,
+    onScenePointerMissed,
+  } = useWallDrawing();
+  const {
+    previewRectangle,
+    previewMetrics: roomPreviewMetrics,
+    onCanvasPointerDown: onRoomPointerDown,
+    onCanvasPointerMove: onRoomPointerMove,
+    onCanvasPointerUp: onRoomPointerUp,
+  } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
 
   const getWallMetrics = (wall: WallType) => {
@@ -102,6 +139,66 @@ export function Scene() {
       previewPoints[1].z,
     ];
   }, [previewPoints]);
+
+  const previewRectanglePoints = useMemo<
+    [number, number, number, number, number, number, number, number, number, number, number, number] | null
+  >(() => {
+    if (!previewRectangle) {
+      return null;
+    }
+
+    const y = previewRectangle[0].y + 0.03;
+    return [
+      previewRectangle[0].x,
+      y,
+      previewRectangle[0].z,
+      previewRectangle[1].x,
+      y,
+      previewRectangle[1].z,
+      previewRectangle[1].x,
+      y,
+      previewRectangle[1].z,
+      previewRectangle[2].x,
+      y,
+      previewRectangle[2].z,
+    ];
+  }, [previewRectangle]);
+
+  const previewRectanglePointsB = useMemo<
+    [number, number, number, number, number, number, number, number, number, number, number, number] | null
+  >(() => {
+    if (!previewRectangle) {
+      return null;
+    }
+
+    const y = previewRectangle[0].y + 0.03;
+    return [
+      previewRectangle[2].x,
+      y,
+      previewRectangle[2].z,
+      previewRectangle[3].x,
+      y,
+      previewRectangle[3].z,
+      previewRectangle[3].x,
+      y,
+      previewRectangle[3].z,
+      previewRectangle[0].x,
+      y,
+      previewRectangle[0].z,
+    ];
+  }, [previewRectangle]);
+
+  const activeMetricsLabel = useMemo(() => {
+    if (selectedTool === "Muros" && wallPreviewMetrics) {
+      return `L ${wallPreviewMetrics.lengthM.toFixed(2)}m · θ ${wallPreviewMetrics.angleDeg.toFixed(0)}° · €${wallPreviewMetrics.cost.toFixed(0)}`;
+    }
+
+    if (selectedTool === "Suelos" && roomPreviewMetrics) {
+      return `W ${roomPreviewMetrics.widthM.toFixed(2)}m · L ${roomPreviewMetrics.lengthM.toFixed(2)}m · A ${roomPreviewMetrics.areaM2.toFixed(2)}m²`;
+    }
+
+    return null;
+  }, [roomPreviewMetrics, selectedTool, wallPreviewMetrics]);
 
   const openingDefaults = useMemo(() => {
     if (selectedTool === "Puertas") {
@@ -178,7 +275,7 @@ export function Scene() {
   }, [isOpeningTool]);
 
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full">
       <Canvas
         shadows
         camera={{ position: [8, 6, 8], fov: 50 }}
@@ -203,8 +300,18 @@ export function Scene() {
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, 0, 0]}
           visible={false}
-          onPointerDown={onCanvasPointerDown}
-          onPointerMove={onCanvasPointerMove}
+          onPointerDown={(event) => {
+            onWallPointerDown(event);
+            onRoomPointerDown(event);
+          }}
+          onPointerMove={(event) => {
+            onWallPointerMove(event);
+            onRoomPointerMove(event);
+          }}
+          onPointerUp={(event) => {
+            onWallPointerUp(event);
+            onRoomPointerUp(event);
+          }}
         >
           <planeGeometry args={[500, 500]} />
           <meshBasicMaterial transparent opacity={0} />
@@ -259,6 +366,8 @@ export function Scene() {
         ) : null}
 
         {previewLinePoints ? <PreviewLine points={previewLinePoints} /> : null}
+        {previewRectanglePoints ? <PreviewRectangle points={previewRectanglePoints} /> : null}
+        {previewRectanglePointsB ? <PreviewRectangle points={previewRectanglePointsB} /> : null}
 
         {selectedWall ? (
           <Controls3D
@@ -289,6 +398,12 @@ export function Scene() {
           }}
         />
       </Canvas>
+
+      {activeMetricsLabel ? (
+        <div className="pointer-events-none absolute bottom-5 left-5 rounded-lg border border-cyan-500/30 bg-slate-950/80 px-3 py-2 text-xs text-cyan-100">
+          {activeMetricsLabel}
+        </div>
+      ) : null}
     </div>
   );
 }
