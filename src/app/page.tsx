@@ -118,18 +118,21 @@ export default function Home() {
   }
 
   return (
-    <main className="flex h-screen w-full flex-col bg-fondo text-slate-100">
+    <main className="flex h-screen w-full flex-col bg-[radial-gradient(circle_at_20%_0%,#12233f_0%,#0b1220_35%,#070d18_100%)] text-slate-100">
       <div className="flex min-h-0 flex-1">
         <Sidebar selectedTool={selectedTool} onSelectTool={setSelectedTool} />
 
-        <section className="relative flex-1 border-r border-panelBorde">
-          <div className="absolute left-4 top-4 z-10 rounded-md border border-panelBorde bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
-            {es.app.sceneView} · {es.app.activeTool}: {es.tools[selectedTool]}
+        <section className="relative flex-1 border-r border-slate-800/90">
+          <div className="pointer-events-none absolute left-5 top-5 z-10 rounded-2xl border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-xs text-slate-200 shadow-xl backdrop-blur-sm">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-200/80">{es.app.sceneView}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-100">
+              {es.app.activeTool}: <span className="text-cyan-200">{es.tools[selectedTool]}</span>
+            </p>
           </div>
           <Scene />
         </section>
 
-        <aside className="w-80 shrink-0 bg-panel/70 p-5">
+        <aside className="w-80 shrink-0 border-l border-slate-800/90 bg-[linear-gradient(180deg,#111d33_0%,#0c1525_35%,#09101d_100%)] p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-300">{es.inspector.title}</h2>
             <Button variant="secondary" onClick={handleExportProject}>
