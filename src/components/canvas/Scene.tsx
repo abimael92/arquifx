@@ -65,11 +65,14 @@ export function Scene() {
   const selectedOpeningId = useAppStore((state) => state.selectedOpeningId);
   const selectedFloorId = useAppStore((state) => state.selectedFloorId);
   const selectedTool = useAppStore((state) => state.selectedTool);
+  const activeMode = useAppStore((state) => state.activeMode);
   const levels = useAppStore((state) => state.levels);
   const selectWall = useAppStore((state) => state.selectWall);
   const selectOpening = useAppStore((state) => state.selectOpening);
   const selectFloor = useAppStore((state) => state.selectFloor);
   const addOpening = useAppStore((state) => state.addOpening);
+  const deleteWall = useAppStore((state) => state.deleteWall);
+  const deleteOpening = useAppStore((state) => state.deleteOpening);
   const showGrid = useAppStore((state) => state.showGrid);
   const updateWall = useAppStore((state) => state.updateWall);
   const setCameraPosition = useAppStore((state) => state.setCameraPosition);
@@ -84,6 +87,9 @@ export function Scene() {
     rotationY: number;
     thickness: number;
   } | null>(null);
+  const [hoveredDemolish, setHoveredDemolish] = useState<{ type: "wall" | "opening"; id: string } | null>(null);
+  const [isDemolishDragging, setIsDemolishDragging] = useState(false);
+  const erasedInDragRef = useRef<Set<string>>(new Set());
 
   const orbitControlsRef = useRef<OrbitControlsImpl>(null);
 
@@ -105,6 +111,7 @@ export function Scene() {
     onCanvasPointerUp: onRoomPointerUp,
   } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
+  const isDemolishMode = activeMode === "demolish" || selectedTool === "Eliminar";
 
   const visibleLevelIds = useMemo(
     () => new Set(levels.filter((level) => level.visible).map((level) => level.id)),
@@ -257,7 +264,34 @@ export function Scene() {
     return null;
   }, [selectedTool]);
 
+  const eraseEntity = (type: "wall" | "opening", id: string) => {
+    if (type === "wall") {
+      deleteWall(id);
+      return;
+    }
+
+    deleteOpening(id);
+  };
+
+  const eraseEntityOncePerDrag = (type: "wall" | "opening", id: string) => {
+    const key = `${type}:${id}`;
+    if (erasedInDragRef.current.has(key)) {
+      return;
+    }
+
+    erasedInDragRef.current.add(key);
+    eraseEntity(type, id);
+  };
+
   const handleWallPointerMove = (wall: WallType, event: ThreeEvent<PointerEvent>) => {
+    if (isDemolishMode) {
+      setHoveredDemolish({ type: "wall", id: wall.id });
+      if (isDemolishDragging && (event.buttons & 1) === 1) {
+        eraseEntityOncePerDrag("wall", wall.id);
+      }
+      return;
+    }
+
     if (!isOpeningTool || !openingDefaults) {
       return;
     }
@@ -289,6 +323,11 @@ export function Scene() {
   };
 
   const handleWallClick = (wall: WallType) => {
+    if (isDemolishMode) {
+      eraseEntity("wall", wall.id);
+      return;
+    }
+
     if (isOpeningTool && openingDefaults) {
       const preview = openingPreview?.wallId === wall.id ? openingPreview : null;
       if (!preview) {
@@ -309,6 +348,23 @@ export function Scene() {
     }
   }, [isOpeningTool]);
 
+  useEffect(() => {
+    if (!isDemolishMode) {
+      setHoveredDemolish(null);
+      setIsDemolishDragging(false);
+      erasedInDragRef.current.clear();
+      return;
+    }
+
+    const handlePointerUp = () => {
+      setIsDemolishDragging(false);
+      erasedInDragRef.current.clear();
+    };
+
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => window.removeEventListener("pointerup", handlePointerUp);
+  }, [isDemolishMode]);
+
   return (
     <div className="relative h-full w-full">
       <Canvas
@@ -317,6 +373,9 @@ export function Scene() {
         onPointerMissed={() => {
           onScenePointerMissed();
           setOpeningPreview(null);
+          if (isDemolishMode) {
+            setHoveredDemolish(null);
+          }
         }}
       >
         <color attach="background" args={["#0b1220"]} />
@@ -336,6 +395,10 @@ export function Scene() {
           position={[0, 0, 0]}
           visible={false}
           onPointerDown={(event) => {
+            if (isDemolishMode) {
+              setIsDemolishDragging(true);
+              erasedInDragRef.current.clear();
+            }
             onWallPointerDown(event);
             onRoomPointerDown(event);
           }}
@@ -360,6 +423,17 @@ export function Scene() {
             onSelect={(wallId) => selectWall(wallId)}
             onWallPointerMove={handleWallPointerMove}
             onWallClick={(wallItem) => handleWallClick(wallItem)}
+            onWallPointerEnter={(wallItem) => {
+              if (isDemolishMode) {
+                setHoveredDemolish({ type: "wall", id: wallItem.id });
+              }
+            }}
+            onWallPointerLeave={(wallItem) => {
+              if (isDemolishMode && hoveredDemolish?.type === "wall" && hoveredDemolish.id === wallItem.id) {
+                setHoveredDemolish(null);
+              }
+            }}
+            isHighlighted={isDemolishMode && hoveredDemolish?.type === "wall" && hoveredDemolish.id === wall.id}
           />
         ))}
 
@@ -384,7 +458,37 @@ export function Scene() {
               opening={opening}
               wall={wall}
               isSelected={opening.id === selectedOpeningId}
-              onSelect={(openingId) => selectOpening(openingId)}
+              onSelect={(openingId) => {
+                if (isDemolishMode) {
+                  eraseEntity("opening", openingId);
+                  return;
+                }
+
+                selectOpening(openingId);
+              }}
+              onOpeningPointerMove={(openingItem, event) => {
+                if (!isDemolishMode) {
+                  return;
+                }
+
+                setHoveredDemolish({ type: "opening", id: openingItem.id });
+                if (isDemolishDragging && (event.buttons & 1) === 1) {
+                  eraseEntityOncePerDrag("opening", openingItem.id);
+                }
+              }}
+              onOpeningPointerEnter={(openingItem) => {
+                if (isDemolishMode) {
+                  setHoveredDemolish({ type: "opening", id: openingItem.id });
+                }
+              }}
+              onOpeningPointerLeave={(openingItem) => {
+                if (isDemolishMode && hoveredDemolish?.type === "opening" && hoveredDemolish.id === openingItem.id) {
+                  setHoveredDemolish(null);
+                }
+              }}
+              isHighlighted={
+                isDemolishMode && hoveredDemolish?.type === "opening" && hoveredDemolish.id === opening.id
+              }
             />
           );
         })}

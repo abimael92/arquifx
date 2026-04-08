@@ -9,12 +9,24 @@ import { Wall as WallType } from "@/types/project.types";
 interface WallProps {
   wall: WallType;
   isSelected: boolean;
+  isHighlighted?: boolean;
   onSelect: (wallId: string) => void;
   onWallPointerMove?: (wall: WallType, event: ThreeEvent<PointerEvent>) => void;
   onWallClick?: (wall: WallType, event: ThreeEvent<MouseEvent>) => void;
+  onWallPointerEnter?: (wall: WallType) => void;
+  onWallPointerLeave?: (wall: WallType) => void;
 }
 
-export function Wall({ wall, isSelected, onSelect, onWallPointerMove, onWallClick }: WallProps) {
+export function Wall({
+  wall,
+  isSelected,
+  isHighlighted = false,
+  onSelect,
+  onWallPointerMove,
+  onWallClick,
+  onWallPointerEnter,
+  onWallPointerLeave,
+}: WallProps) {
   const { length, position, rotationY } = useMemo(() => {
     const dx = wall.endPoint.x - wall.startPoint.x;
     const dy = wall.endPoint.y - wall.startPoint.y;
@@ -41,6 +53,12 @@ export function Wall({ wall, isSelected, onSelect, onWallPointerMove, onWallClic
       onPointerMove={(event) => {
         onWallPointerMove?.(wall, event);
       }}
+      onPointerEnter={() => {
+        onWallPointerEnter?.(wall);
+      }}
+      onPointerLeave={() => {
+        onWallPointerLeave?.(wall);
+      }}
       onClick={(event) => {
         event.stopPropagation();
         if (onWallClick) {
@@ -52,8 +70,9 @@ export function Wall({ wall, isSelected, onSelect, onWallPointerMove, onWallClic
       }}
     >
       <boxGeometry args={[length, wall.height, wall.thickness]} />
-      <meshStandardMaterial color={isSelected ? "#facc15" : "#9ca3af"} />
-      {isSelected ? <Outlines color="#facc15" thickness={3} transparent /> : null}
+      <meshStandardMaterial color={isHighlighted ? "#ef4444" : isSelected ? "#facc15" : "#9ca3af"} />
+      {isHighlighted ? <Outlines color="#ef4444" thickness={3} transparent /> : null}
+      {!isHighlighted && isSelected ? <Outlines color="#facc15" thickness={3} transparent /> : null}
     </mesh>
   );
 }
