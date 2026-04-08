@@ -2,7 +2,7 @@
 
 import { OrbitControls, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { BufferAttribute, BufferGeometry, MOUSE, Mesh, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -10,7 +10,7 @@ import { useFloorDetection } from "@/hooks/useFloorDetection";
 import { useRoomDrawing } from "@/hooks/useRoomDrawing";
 import { useWallDrawing } from "@/hooks/useWallDrawing";
 import { useAppStore } from "@/store";
-import { Wall as WallType } from "@/types/project.types";
+import { CameraState, ViewMode, Wall as WallType } from "@/types/project.types";
 
 import { Controls3D } from "./Controls3D";
 import { Floor } from "./Floor";
@@ -33,6 +33,122 @@ function PreviewLine({ points }: { points: [number, number, number, number, numb
       <lineBasicMaterial color="#22d3ee" linewidth={2} />
     </lineSegments>
   );
+}
+
+function SceneFrameController({
+  orbitControlsRef,
+  perspectiveCameraRef,
+  orthoCameraRef,
+  viewMode,
+  cameraControlMode,
+  cameraTransition,
+  keysPressedRef,
+  clearCameraTransition,
+  setCameraPosition,
+  setCameraStateForMode,
+}: {
+  orbitControlsRef: RefObject<OrbitControlsImpl | null>;
+  perspectiveCameraRef: RefObject<PerspectiveCameraImpl | null>;
+  orthoCameraRef: RefObject<OrthographicCameraImpl | null>;
+  viewMode: ViewMode;
+  cameraControlMode: "orbit" | "free";
+  cameraTransition: { active: boolean; mode: ViewMode; target: CameraState } | null;
+  keysPressedRef: RefObject<Set<string>>;
+  clearCameraTransition: () => void;
+  setCameraPosition: (position: { x: number; y: number; z: number }) => void;
+  setCameraStateForMode: (mode: ViewMode, cameraState: Partial<CameraState>) => void;
+}) {
+  useFrame((_, delta) => {
+    const controls = orbitControlsRef.current;
+    const activeCamera = viewMode === "blueprint" ? orthoCameraRef.current : perspectiveCameraRef.current;
+
+    if (!controls || !activeCamera) {
+      return;
+    }
+
+    if (cameraTransition && cameraTransition.active && cameraTransition.mode === viewMode) {
+      const factor = Math.min(1, delta * 6);
+      const target = cameraTransition.target;
+
+      activeCamera.position.lerp(new Vector3(target.position.x, target.position.y, target.position.z), factor);
+      controls.target.lerp(new Vector3(target.target.x, target.target.y, target.target.z), factor);
+      activeCamera.zoom += (target.zoom - activeCamera.zoom) * factor;
+      activeCamera.updateProjectionMatrix();
+
+      const reached =
+        activeCamera.position.distanceTo(new Vector3(target.position.x, target.position.y, target.position.z)) < 0.04 &&
+        controls.target.distanceTo(new Vector3(target.target.x, target.target.y, target.target.z)) < 0.04 &&
+        Math.abs(activeCamera.zoom - target.zoom) < 0.02;
+
+      if (reached) {
+        clearCameraTransition();
+      }
+    }
+
+    if (cameraControlMode === "free" && viewMode !== "blueprint") {
+      const speed = keysPressedRef.current?.has("shift") ? 10 : 4;
+      const forward = new Vector3().subVectors(controls.target, activeCamera.position).setY(0).normalize();
+      const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
+      const moveStep = speed * delta;
+
+      if (keysPressedRef.current?.has("w")) {
+        activeCamera.position.addScaledVector(forward, moveStep);
+        controls.target.addScaledVector(forward, moveStep);
+      }
+      if (keysPressedRef.current?.has("s")) {
+        activeCamera.position.addScaledVector(forward, -moveStep);
+        controls.target.addScaledVector(forward, -moveStep);
+      }
+      if (keysPressedRef.current?.has("a")) {
+        activeCamera.position.addScaledVector(right, -moveStep);
+        controls.target.addScaledVector(right, -moveStep);
+      }
+      if (keysPressedRef.current?.has("d")) {
+        activeCamera.position.addScaledVector(right, moveStep);
+        controls.target.addScaledVector(right, moveStep);
+      }
+      if (keysPressedRef.current?.has("q") || keysPressedRef.current?.has("e")) {
+        const dir = keysPressedRef.current?.has("q") ? -1 : 1;
+        const rel = new Vector3().subVectors(activeCamera.position, controls.target);
+        rel.applyAxisAngle(new Vector3(0, 1, 0), dir * delta * 1.4);
+        activeCamera.position.copy(new Vector3().addVectors(controls.target, rel));
+      }
+    }
+
+    if (activeCamera.position.y < 0.45) {
+      activeCamera.position.y = 0.45;
+    }
+    if (controls.target.y < 0) {
+      controls.target.y = 0;
+    }
+
+    controls.update();
+    setCameraPosition({
+      x: activeCamera.position.x,
+      y: activeCamera.position.y,
+      z: activeCamera.position.z,
+    });
+    setCameraStateForMode(viewMode, {
+      position: {
+        x: activeCamera.position.x,
+        y: activeCamera.position.y,
+        z: activeCamera.position.z,
+      },
+      target: {
+        x: controls.target.x,
+        y: controls.target.y,
+        z: controls.target.z,
+      },
+      zoom: activeCamera.zoom,
+      rotation: {
+        x: activeCamera.rotation.x,
+        y: activeCamera.rotation.y,
+        z: activeCamera.rotation.z,
+      },
+    });
+  });
+
+  return null;
 }
 
 function BlueprintWallLines({ walls }: { walls: WallType[] }) {
@@ -623,96 +739,6 @@ export function Scene() {
     focus();
   }, [selectedOpeningId, selectedWallId]);
 
-  useFrame((_, delta) => {
-    const controls = orbitControlsRef.current;
-    const activeCamera = viewMode === "blueprint" ? orthoCameraRef.current : perspectiveCameraRef.current;
-
-    if (!controls || !activeCamera) {
-      return;
-    }
-
-    if (cameraTransition && cameraTransition.active && cameraTransition.mode === viewMode) {
-      const factor = Math.min(1, delta * 6);
-      const target = cameraTransition.target;
-
-      activeCamera.position.lerp(new Vector3(target.position.x, target.position.y, target.position.z), factor);
-      controls.target.lerp(new Vector3(target.target.x, target.target.y, target.target.z), factor);
-      activeCamera.zoom += (target.zoom - activeCamera.zoom) * factor;
-      activeCamera.updateProjectionMatrix();
-
-      const reached =
-        activeCamera.position.distanceTo(new Vector3(target.position.x, target.position.y, target.position.z)) < 0.04 &&
-        controls.target.distanceTo(new Vector3(target.target.x, target.target.y, target.target.z)) < 0.04 &&
-        Math.abs(activeCamera.zoom - target.zoom) < 0.02;
-
-      if (reached) {
-        clearCameraTransition();
-      }
-    }
-
-    if (cameraControlMode === "free" && viewMode !== "blueprint") {
-      const speed = keysPressedRef.current.has("shift") ? 10 : 4;
-      const forward = new Vector3().subVectors(controls.target, activeCamera.position).setY(0).normalize();
-      const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
-      const moveStep = speed * delta;
-
-      if (keysPressedRef.current.has("w")) {
-        activeCamera.position.addScaledVector(forward, moveStep);
-        controls.target.addScaledVector(forward, moveStep);
-      }
-      if (keysPressedRef.current.has("s")) {
-        activeCamera.position.addScaledVector(forward, -moveStep);
-        controls.target.addScaledVector(forward, -moveStep);
-      }
-      if (keysPressedRef.current.has("a")) {
-        activeCamera.position.addScaledVector(right, -moveStep);
-        controls.target.addScaledVector(right, -moveStep);
-      }
-      if (keysPressedRef.current.has("d")) {
-        activeCamera.position.addScaledVector(right, moveStep);
-        controls.target.addScaledVector(right, moveStep);
-      }
-      if (keysPressedRef.current.has("q") || keysPressedRef.current.has("e")) {
-        const dir = keysPressedRef.current.has("q") ? -1 : 1;
-        const rel = new Vector3().subVectors(activeCamera.position, controls.target);
-        rel.applyAxisAngle(new Vector3(0, 1, 0), dir * delta * 1.4);
-        activeCamera.position.copy(new Vector3().addVectors(controls.target, rel));
-      }
-    }
-
-    if (activeCamera.position.y < 0.45) {
-      activeCamera.position.y = 0.45;
-    }
-    if (controls.target.y < 0) {
-      controls.target.y = 0;
-    }
-
-    controls.update();
-    setCameraPosition({
-      x: activeCamera.position.x,
-      y: activeCamera.position.y,
-      z: activeCamera.position.z,
-    });
-    setCameraStateForMode(viewMode, {
-      position: {
-        x: activeCamera.position.x,
-        y: activeCamera.position.y,
-        z: activeCamera.position.z,
-      },
-      target: {
-        x: controls.target.x,
-        y: controls.target.y,
-        z: controls.target.z,
-      },
-      zoom: activeCamera.zoom,
-      rotation: {
-        x: activeCamera.rotation.x,
-        y: activeCamera.rotation.y,
-        z: activeCamera.rotation.z,
-      },
-    });
-  });
-
   const majorGridDivisions = useMemo(() => Math.max(4, Math.round(120 / gridSpacing)), [gridSpacing]);
 
   return (
@@ -737,6 +763,19 @@ export function Scene() {
 
         <PerspectiveCamera ref={perspectiveCameraRef} makeDefault={viewMode !== "blueprint"} fov={50} />
         <OrthographicCamera ref={orthoCameraRef} makeDefault={viewMode === "blueprint"} near={0.1} far={2000} zoom={36} />
+
+        <SceneFrameController
+          orbitControlsRef={orbitControlsRef}
+          perspectiveCameraRef={perspectiveCameraRef}
+          orthoCameraRef={orthoCameraRef}
+          viewMode={viewMode}
+          cameraControlMode={cameraControlMode}
+          cameraTransition={cameraTransition}
+          keysPressedRef={keysPressedRef}
+          clearCameraTransition={clearCameraTransition}
+          setCameraPosition={setCameraPosition}
+          setCameraStateForMode={setCameraStateForMode}
+        />
 
         <ambientLight intensity={viewMode === "blueprint" ? 0.2 : 0.45} />
         {viewMode !== "blueprint" ? <directionalLight castShadow intensity={1.1} position={[8, 14, 10]} /> : null}
