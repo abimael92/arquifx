@@ -15,6 +15,7 @@ const PRECISE_SNAP_SIZE = 0.01;
 const ANGLE_SNAP_DEG = 45;
 const PRECISE_ANGLE_SNAP_DEG = 15;
 const MIN_WALL_LENGTH = 0.1;
+const MIN_DRAG_COMMIT_LENGTH = 0.2;
 
 const snapValue = (value: number, snapSize: number) => snapToGrid(value, snapSize);
 
@@ -158,6 +159,11 @@ export function useWallDrawing() {
       const dx = snapped.x - startPoint.x;
       const dz = snapped.z - startPoint.z;
       const length = Math.sqrt(dx * dx + dz * dz);
+
+      if (length < MIN_DRAG_COMMIT_LENGTH) {
+        cancelDrawing();
+        return;
+      }
 
       if (length >= MIN_WALL_LENGTH) {
         addWall({

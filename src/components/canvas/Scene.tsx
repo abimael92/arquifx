@@ -3,7 +3,7 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BufferAttribute, BufferGeometry, Mesh } from "three";
+import { BufferAttribute, BufferGeometry, MOUSE, Mesh } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { useFloorDetection } from "@/hooks/useFloorDetection";
@@ -168,6 +168,7 @@ export function Scene() {
   } | null>(null);
   const [hoveredDemolish, setHoveredDemolish] = useState<{ type: "wall" | "opening"; id: string } | null>(null);
   const [isDemolishDragging, setIsDemolishDragging] = useState(false);
+  const [isCameraInteractionActive, setIsCameraInteractionActive] = useState(false);
   const erasedInDragRef = useRef<Set<string>>(new Set());
 
   const orbitControlsRef = useRef<OrbitControlsImpl>(null);
@@ -517,11 +518,28 @@ export function Scene() {
     return () => window.removeEventListener("pointerup", handlePointerUp);
   }, [isDemolishMode]);
 
+  useEffect(() => {
+    const releaseCameraInteraction = () => {
+      setIsCameraInteractionActive(false);
+    };
+
+    window.addEventListener("pointerup", releaseCameraInteraction);
+    return () => window.removeEventListener("pointerup", releaseCameraInteraction);
+  }, []);
+
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full"
+      onContextMenu={(event) => {
+        event.preventDefault();
+      }}
+    >
       <Canvas
         shadows
         camera={{ position: [8, 6, 8], fov: 50 }}
+        onPointerDown={(event) => {
+          setIsCameraInteractionActive(event.button === 2);
+        }}
         onPointerMissed={() => {
           onScenePointerMissed();
           setOpeningPreview(null);
@@ -547,6 +565,10 @@ export function Scene() {
           position={[0, 0, 0]}
           visible={false}
           onPointerDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
             if (isDemolishMode) {
               setIsDemolishDragging(true);
               erasedInDragRef.current.clear();
@@ -735,12 +757,26 @@ export function Scene() {
         <OrbitControls
           ref={orbitControlsRef}
           makeDefault
+          enabled={isCameraInteractionActive}
+          enableZoom={false}
           enableDamping
           dampingFactor={0.08}
+          minPolarAngle={0.08}
+          maxPolarAngle={Math.PI / 2 - 0.08}
+          mouseButtons={{ LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }}
           onChange={() => {
-            const position = orbitControlsRef.current?.object.position;
-            if (!position) {
+            const controls = orbitControlsRef.current;
+            const position = controls?.object.position;
+            if (!position || !controls) {
               return;
+            }
+
+            if (position.y < 0.45) {
+              position.y = 0.45;
+            }
+
+            if (controls.target.y < 0) {
+              controls.target.y = 0;
             }
 
             setCameraPosition({
