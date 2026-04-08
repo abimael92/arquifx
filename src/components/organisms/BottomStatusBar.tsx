@@ -1,10 +1,12 @@
 import es from "@/locales/es.json";
 import { SelectedTool } from "@/store";
-import { Vector3D } from "@/types/project.types";
+import { BuildMode, Vector3D } from "@/types/project.types";
 
 interface BottomStatusBarProps {
   coordinates: Vector3D;
   activeTool: SelectedTool;
+  activeMode: BuildMode;
+  activeLevelName: string;
   isProjectSaved: boolean;
   totalAreaM2: number;
 }
@@ -15,7 +17,21 @@ const formatNumber = (value: number) =>
     maximumFractionDigits: 2,
   });
 
-export function BottomStatusBar({ coordinates, activeTool, isProjectSaved, totalAreaM2 }: BottomStatusBarProps) {
+const modeLabels: Record<BuildMode, string> = {
+  build: "Construir",
+  object: "Objetos",
+  select: "Seleccionar",
+  demolish: "Demoler",
+};
+
+export function BottomStatusBar({
+  coordinates,
+  activeTool,
+  activeMode,
+  activeLevelName,
+  isProjectSaved,
+  totalAreaM2,
+}: BottomStatusBarProps) {
   return (
     <footer className="border-t border-slate-800/90 bg-[linear-gradient(180deg,#090f1b_0%,#070d18_100%)] px-4 py-3 text-xs text-slate-200">
       <div className="flex flex-wrap items-center gap-2">
@@ -29,6 +45,14 @@ export function BottomStatusBar({ coordinates, activeTool, isProjectSaved, total
 
         <span className="rounded-full border border-slate-700/90 bg-slate-900/75 px-3 py-1.5">
           {es.app.activeTool}: {es.tools[activeTool]}
+        </span>
+
+        <span className="rounded-full border border-indigo-500/35 bg-indigo-500/10 px-3 py-1.5 text-indigo-100">
+          Modo: {modeLabels[activeMode]}
+        </span>
+
+        <span className="rounded-full border border-slate-700/90 bg-slate-900/75 px-3 py-1.5">
+          Nivel: {activeLevelName}
         </span>
 
         <span

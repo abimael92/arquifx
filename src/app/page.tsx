@@ -31,6 +31,9 @@ export default function Home() {
   const saveProject = useAppStore((state) => state.saveProject);
   const cameraPosition = useAppStore((state) => state.cameraPosition);
   const currentProject = useAppStore((state) => state.currentProject);
+  const activeMode = useAppStore((state) => state.activeMode);
+  const activeLevelId = useAppStore((state) => state.activeLevelId);
+  const levels = useAppStore((state) => state.levels);
 
   const [showSavedToast, setShowSavedToast] = useState(false);
 
@@ -67,6 +70,7 @@ export default function Home() {
   const estimatedCost = calculateProjectCost(projectForCost);
   const doorsCount = openings.filter((opening) => opening.type === "puerta").length;
   const windowsCount = openings.filter((opening) => opening.type === "ventana").length;
+  const activeLevelName = levels.find((level) => level.id === activeLevelId)?.name ?? "Nivel 1";
 
   const handleExportProject = () => {
     const project = saveProject();
@@ -177,6 +181,8 @@ export default function Home() {
       <BottomStatusBar
         coordinates={cameraPosition}
         activeTool={selectedTool}
+        activeMode={activeMode}
+        activeLevelName={activeLevelName}
         isProjectSaved={Boolean(currentProject)}
         totalAreaM2={totalArea}
       />

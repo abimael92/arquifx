@@ -65,6 +65,7 @@ export function Scene() {
   const selectedOpeningId = useAppStore((state) => state.selectedOpeningId);
   const selectedFloorId = useAppStore((state) => state.selectedFloorId);
   const selectedTool = useAppStore((state) => state.selectedTool);
+  const levels = useAppStore((state) => state.levels);
   const selectWall = useAppStore((state) => state.selectWall);
   const selectOpening = useAppStore((state) => state.selectOpening);
   const selectFloor = useAppStore((state) => state.selectFloor);
@@ -105,6 +106,40 @@ export function Scene() {
   } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
 
+  const visibleLevelIds = useMemo(
+    () => new Set(levels.filter((level) => level.visible).map((level) => level.id)),
+    [levels],
+  );
+
+  const visibleWalls = useMemo(
+    () =>
+      walls.filter((wall) => {
+        if (!wall.levelId) {
+          return true;
+        }
+
+        return visibleLevelIds.has(wall.levelId);
+      }),
+    [visibleLevelIds, walls],
+  );
+
+  const visibleFloors = useMemo(
+    () =>
+      floors.filter((floor) => {
+        if (!floor.levelId) {
+          return true;
+        }
+
+        return visibleLevelIds.has(floor.levelId);
+      }),
+    [floors, visibleLevelIds],
+  );
+
+  const visibleOpenings = useMemo(
+    () => openings.filter((opening) => visibleWalls.some((wall) => wall.id === opening.wallId)),
+    [openings, visibleWalls],
+  );
+
   const getWallMetrics = (wall: WallType) => {
     const dx = wall.endPoint.x - wall.startPoint.x;
     const dz = wall.endPoint.z - wall.startPoint.z;
@@ -121,8 +156,8 @@ export function Scene() {
   };
 
   const selectedWall = useMemo(
-    () => walls.find((wall) => wall.id === selectedWallId) ?? null,
-    [selectedWallId, walls],
+    () => visibleWalls.find((wall) => wall.id === selectedWallId) ?? null,
+    [selectedWallId, visibleWalls],
   );
 
   const previewLinePoints = useMemo<[number, number, number, number, number, number] | null>(() => {
@@ -317,7 +352,7 @@ export function Scene() {
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
 
-        {walls.map((wall) => (
+        {visibleWalls.map((wall) => (
           <Wall
             key={wall.id}
             wall={wall}
@@ -328,7 +363,7 @@ export function Scene() {
           />
         ))}
 
-        {floors.map((floor) => (
+        {visibleFloors.map((floor) => (
           <Floor
             key={floor.id}
             floor={floor}
@@ -337,9 +372,9 @@ export function Scene() {
           />
         ))}
 
-        {openings.map((opening) => {
-          const parentWall = walls.find((wall) => wall.id === opening.wallId);
-          if (!parentWall) {
+        {visibleOpenings.map((opening) => {
+          const wall = visibleWalls.find((item) => item.id === opening.wallId);
+          if (!wall) {
             return null;
           }
 
@@ -347,7 +382,7 @@ export function Scene() {
             <Opening
               key={opening.id}
               opening={opening}
-              wall={parentWall}
+              wall={wall}
               isSelected={opening.id === selectedOpeningId}
               onSelect={(openingId) => selectOpening(openingId)}
             />
