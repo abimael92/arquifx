@@ -8,23 +8,19 @@ const SIZE = 180;
 
 export function MiniMap() {
   const walls = useAppStore((state) => state.walls);
+  const lot = useAppStore((state) => state.lot);
   const viewMode = useAppStore((state) => state.viewMode);
   const cameraStates = useAppStore((state) => state.cameraStates);
   const transitionCameraTo = useAppStore((state) => state.transitionCameraTo);
 
   const bounds = useMemo(() => {
-    if (!walls.length) {
-      return { minX: -10, maxX: 10, minZ: -10, maxZ: 10 };
-    }
-
-    const xs = walls.flatMap((wall) => [wall.startPoint.x, wall.endPoint.x]);
-    const zs = walls.flatMap((wall) => [wall.startPoint.z, wall.endPoint.z]);
-    const minX = Math.min(...xs) - 1;
-    const maxX = Math.max(...xs) + 1;
-    const minZ = Math.min(...zs) - 1;
-    const maxZ = Math.max(...zs) + 1;
-    return { minX, maxX, minZ, maxZ };
-  }, [walls]);
+    return {
+      minX: -lot.width / 2,
+      maxX: lot.width / 2,
+      minZ: -lot.length / 2,
+      maxZ: lot.length / 2,
+    };
+  }, [lot.length, lot.width]);
 
   const width = Math.max(bounds.maxX - bounds.minX, 1);
   const length = Math.max(bounds.maxZ - bounds.minZ, 1);

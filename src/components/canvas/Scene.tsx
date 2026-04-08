@@ -2,7 +2,7 @@
 
 import { OrbitControls, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
-import { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { RefObject, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { BufferAttribute, BufferGeometry, MOUSE, Mesh, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -15,7 +15,12 @@ import { CameraState, ViewMode, Wall as WallType } from "@/types/project.types";
 import { Controls3D } from "./Controls3D";
 import { Floor } from "./Floor";
 import { Opening } from "./Opening";
+import { Terrain } from "./Terrain";
 import { Wall } from "./Wall";
+
+const RealisticLighting = lazy(() =>
+  import("./RealisticLighting").then((module) => ({ default: module.RealisticLighting })),
+);
 
 function PreviewLine({ points }: { points: [number, number, number, number, number, number] }) {
   const geometry = useMemo(() => {
@@ -46,6 +51,7 @@ function SceneFrameController({
   clearCameraTransition,
   setCameraPosition,
   setCameraStateForMode,
+  onQualitySample,
 }: {
   orbitControlsRef: RefObject<OrbitControlsImpl | null>;
   perspectiveCameraRef: RefObject<PerspectiveCameraImpl | null>;
@@ -57,7 +63,11 @@ function SceneFrameController({
   clearCameraTransition: () => void;
   setCameraPosition: (position: { x: number; y: number; z: number }) => void;
   setCameraStateForMode: (mode: ViewMode, cameraState: Partial<CameraState>) => void;
+  onQualitySample: (fps: number) => void;
 }) {
+  const frameAccumulatorRef = useRef(0);
+  const elapsedAccumulatorRef = useRef(0);
+
   useFrame((_, delta) => {
     const controls = orbitControlsRef.current;
     const activeCamera = viewMode === "blueprint" ? orthoCameraRef.current : perspectiveCameraRef.current;
@@ -123,6 +133,15 @@ function SceneFrameController({
     }
 
     controls.update();
+
+    frameAccumulatorRef.current += 1;
+    elapsedAccumulatorRef.current += delta;
+    if (elapsedAccumulatorRef.current >= 1) {
+      onQualitySample(frameAccumulatorRef.current / elapsedAccumulatorRef.current);
+      frameAccumulatorRef.current = 0;
+      elapsedAccumulatorRef.current = 0;
+    }
+
     setCameraPosition({
       x: activeCamera.position.x,
       y: activeCamera.position.y,
@@ -302,6 +321,11 @@ export function Scene() {
   const deleteOpening = useAppStore((state) => state.deleteOpening);
   const updateOpening = useAppStore((state) => state.updateOpening);
   const showGrid = useAppStore((state) => state.showGrid);
+  const lot = useAppStore((state) => state.lot);
+  const mode = useAppStore((state) => state.mode);
+  const terrainViolation = useAppStore((state) => state.terrainViolation);
+  const realisticShadows = useAppStore((state) => state.realisticShadows);
+  const sunAzimuth = useAppStore((state) => state.sunAzimuth);
   const updateWall = useAppStore((state) => state.updateWall);
   const setCameraPosition = useAppStore((state) => state.setCameraPosition);
   const openingRailConstrainedThresholdM = useAppStore((state) => state.openingRailConstrainedThresholdM);
@@ -326,8 +350,10 @@ export function Scene() {
   } | null>(null);
   const [hoveredDemolish, setHoveredDemolish] = useState<{ type: "wall" | "opening"; id: string } | null>(null);
   const [isDemolishDragging, setIsDemolishDragging] = useState(false);
+  const [invalidActionMessage, setInvalidActionMessage] = useState<string | null>(null);
   const erasedInDragRef = useRef<Set<string>>(new Set());
   const keysPressedRef = useRef<Set<string>>(new Set());
+  const invalidActionTimeoutRef = useRef<number | null>(null);
 
   const orbitControlsRef = useRef<OrbitControlsImpl>(null);
   const perspectiveCameraRef = useRef<PerspectiveCameraImpl>(null);
@@ -351,8 +377,11 @@ export function Scene() {
     onCanvasPointerUp: onRoomPointerUp,
   } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
+  const isViewMode = mode === "view";
   const isObjectMode = activeMode === "object" || isOpeningTool;
   const isDemolishMode = activeMode === "demolish" || selectedTool === "Eliminar";
+  const [isLowPerformanceMode, setIsLowPerformanceMode] = useState(false);
+  const effectiveRealisticShadows = realisticShadows && !isLowPerformanceMode;
 
   const visibleLevelIds = useMemo(
     () => new Set(levels.filter((level) => level.visible).map((level) => level.id)),
@@ -401,6 +430,45 @@ export function Scene() {
       dirZ,
       rotationY: Math.atan2(dz, dx),
     };
+  };
+
+  const notifyInvalidAction = (message: string) => {
+    setInvalidActionMessage(message);
+    if (invalidActionTimeoutRef.current) {
+      window.clearTimeout(invalidActionTimeoutRef.current);
+    }
+
+    invalidActionTimeoutRef.current = window.setTimeout(() => {
+      setInvalidActionMessage(null);
+    }, 1400);
+  };
+
+  const getViewModeHint = (intent: "general" | "build" | "object" | "demolish" = "general") => {
+    if (intent === "build") {
+      return "Modo View activo: cambia a Build > Muros/Salas para editar";
+    }
+
+    if (intent === "object") {
+      return "Modo View activo: cambia a Object > Puertas/Ventanas";
+    }
+
+    if (intent === "demolish") {
+      return "Modo View activo: cambia a Demolish para eliminar";
+    }
+
+    if (selectedTool === "Muros" || selectedTool === "Suelos") {
+      return "Modo View activo: cambia a Build para continuar";
+    }
+
+    if (selectedTool === "Puertas" || selectedTool === "Ventanas") {
+      return "Modo View activo: cambia a Object para continuar";
+    }
+
+    if (selectedTool === "Eliminar") {
+      return "Modo View activo: cambia a Demolish para continuar";
+    }
+
+    return "Modo View activo: selecciona Build/Object/Demolish para editar";
   };
 
   const selectedWall = useMemo(
@@ -611,6 +679,11 @@ export function Scene() {
   };
 
   const handleWallClick = (wall: WallType) => {
+    if (isViewMode) {
+      notifyInvalidAction(getViewModeHint(isOpeningTool ? "object" : "build"));
+      return;
+    }
+
     if (isDemolishMode) {
       eraseEntity("wall", wall.id);
       return;
@@ -679,6 +752,14 @@ export function Scene() {
   }, [isDemolishMode]);
 
   useEffect(() => {
+    return () => {
+      if (invalidActionTimeoutRef.current) {
+        window.clearTimeout(invalidActionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       keysPressedRef.current.add(event.key.toLowerCase());
     };
@@ -739,11 +820,17 @@ export function Scene() {
     focus();
   }, [selectedOpeningId, selectedWallId]);
 
-  const majorGridDivisions = useMemo(() => Math.max(4, Math.round(120 / gridSpacing)), [gridSpacing]);
+  const terrainSpan = useMemo(() => Math.max(4, Math.max(lot.width, lot.length)), [lot.length, lot.width]);
+  const majorGridDivisions = useMemo(
+    () => Math.max(4, Math.round(terrainSpan / gridSpacing)),
+    [gridSpacing, terrainSpan],
+  );
 
   return (
     <div
-      className="relative h-full w-full"
+      className={`relative h-full w-full ${
+        isDemolishMode ? "cursor-crosshair" : isViewMode ? "cursor-grab" : "cursor-default"
+      }`}
       onContextMenu={(event) => {
         event.preventDefault();
       }}
@@ -775,15 +862,35 @@ export function Scene() {
           clearCameraTransition={clearCameraTransition}
           setCameraPosition={setCameraPosition}
           setCameraStateForMode={setCameraStateForMode}
+          onQualitySample={(fps) => {
+            if (fps < 30) {
+              setIsLowPerformanceMode(true);
+              return;
+            }
+
+            if (fps > 45) {
+              setIsLowPerformanceMode(false);
+            }
+          }}
         />
 
-        <ambientLight intensity={viewMode === "blueprint" ? 0.2 : 0.45} />
-        {viewMode !== "blueprint" ? <directionalLight castShadow intensity={1.1} position={[8, 14, 10]} /> : null}
+        <Terrain width={lot.width} length={lot.length} violationActive={terrainViolation} />
+
+        {viewMode === "realistic" ? (
+          <Suspense fallback={null}>
+            <RealisticLighting shadowsEnabled={effectiveRealisticShadows} sunAzimuth={sunAzimuth} />
+          </Suspense>
+        ) : (
+          <>
+            <ambientLight intensity={viewMode === "blueprint" ? 0.2 : 0.45} />
+            {viewMode !== "blueprint" ? <directionalLight castShadow intensity={1.1} position={[8, 14, 10]} /> : null}
+          </>
+        )}
 
         {showGrid ? (
           <>
-            <gridHelper args={[120, majorGridDivisions, "#475569", "#1e293b"]} position={[0, 0, 0]} />
-            <gridHelper args={[120, 480, "#334155", "#0f172a"]} position={[0, 0.001, 0]} />
+            <gridHelper args={[terrainSpan, majorGridDivisions, "#475569", "#1e293b"]} position={[0, 0, 0]} />
+            <gridHelper args={[terrainSpan, majorGridDivisions * 4, "#334155", "#0f172a"]} position={[0, 0.001, 0]} />
           </>
         ) : null}
 
@@ -793,6 +900,11 @@ export function Scene() {
           visible={false}
           onPointerDown={(event) => {
             if (event.button !== 0) {
+              return;
+            }
+
+            if (isViewMode) {
+              notifyInvalidAction(getViewModeHint());
               return;
             }
 
@@ -823,15 +935,25 @@ export function Scene() {
               }
             }
 
+            if (isViewMode) {
+              notifyInvalidAction(getViewModeHint());
+              return;
+            }
+
             onWallPointerMove(event);
             onRoomPointerMove(event);
           }}
           onPointerUp={(event) => {
+            if (isViewMode) {
+              notifyInvalidAction(getViewModeHint());
+              return;
+            }
+
             onWallPointerUp(event);
             onRoomPointerUp(event);
           }}
         >
-          <planeGeometry args={[500, 500]} />
+          <planeGeometry args={[Math.max(500, lot.width + 8), Math.max(500, lot.length + 8)]} />
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
 
@@ -886,6 +1008,11 @@ export function Scene() {
               wall={wall}
               isSelected={opening.id === selectedOpeningId}
               onSelect={(openingId) => {
+                if (isViewMode) {
+                  notifyInvalidAction(getViewModeHint("object"));
+                  return;
+                }
+
                 if (isDemolishMode) {
                   eraseEntity("opening", openingId);
                   return;
@@ -979,7 +1106,7 @@ export function Scene() {
         {previewRectanglePoints ? <PreviewRectangle points={previewRectanglePoints} /> : null}
         {previewRectanglePointsB ? <PreviewRectangle points={previewRectanglePointsB} /> : null}
 
-        {selectedWall ? (
+        {selectedWall && !isViewMode ? (
           <Controls3D
             wall={selectedWall}
             orbitControlsRef={orbitControlsRef}
@@ -1050,6 +1177,24 @@ export function Scene() {
       {showMeasurements && openingRail?.isConstrained && (isOpeningTool || Boolean(openingDragState)) ? (
         <div className="pointer-events-none absolute bottom-16 left-5 rounded-lg border border-rose-400/40 bg-rose-950/75 px-3 py-2 text-xs text-rose-100">
           Abertura al límite del muro
+        </div>
+      ) : null}
+
+      {terrainViolation ? (
+        <div className="pointer-events-none absolute right-5 top-36 rounded-lg border border-rose-500/50 bg-rose-950/70 px-3 py-2 text-xs text-rose-100">
+          Fuera del terreno: ajuste automático aplicado
+        </div>
+      ) : null}
+
+      {viewMode === "realistic" && isLowPerformanceMode ? (
+        <div className="pointer-events-none absolute right-5 top-48 rounded-lg border border-amber-500/50 bg-amber-950/70 px-3 py-2 text-xs text-amber-100">
+          Rendimiento bajo: sombras reducidas automáticamente
+        </div>
+      ) : null}
+
+      {invalidActionMessage ? (
+        <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-lg border border-indigo-400/50 bg-indigo-950/75 px-3 py-2 text-xs text-indigo-100">
+          {invalidActionMessage}
         </div>
       ) : null}
     </div>

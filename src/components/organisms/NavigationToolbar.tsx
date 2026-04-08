@@ -8,6 +8,8 @@ import {
   RotateCcw,
   RotateCw,
   Target,
+  Sun,
+  SunMoon,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -27,6 +29,10 @@ export function NavigationToolbar() {
   const setShowMeasurements = useAppStore((state) => state.setShowMeasurements);
   const showGrid = useAppStore((state) => state.showGrid);
   const setShowGrid = useAppStore((state) => state.setShowGrid);
+  const realisticShadows = useAppStore((state) => state.realisticShadows);
+  const setRealisticShadows = useAppStore((state) => state.setRealisticShadows);
+  const sunAzimuth = useAppStore((state) => state.sunAzimuth);
+  const setSunAzimuth = useAppStore((state) => state.setSunAzimuth);
 
   const applyPan = (dx: number, dz: number) => {
     const current = cameraStates[viewMode];
@@ -82,6 +88,12 @@ export function NavigationToolbar() {
               target: { x: 0, y: 0, z: 0 },
               zoom: 1,
             }
+          : viewMode === "realistic"
+            ? {
+                position: { x: 10, y: 7, z: 10 },
+                target: { x: 0, y: 0, z: 0 },
+                zoom: 1,
+              }
           : {
               position: { x: 0, y: 20, z: 0.1 },
               target: { x: 0, y: 0, z: 0 },
@@ -183,6 +195,37 @@ export function NavigationToolbar() {
       >
         Measurements
       </button>
+
+      {viewMode === "realistic" ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setRealisticShadows(!realisticShadows)}
+            className={`toolbar-btn col-span-2 ${realisticShadows ? "border-amber-400/60 text-amber-100" : ""}`}
+            title="Toggle realistic shadows"
+          >
+            <SunMoon className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSunAzimuth(sunAzimuth - Math.PI / 18)}
+            className="toolbar-btn"
+            title="Rotate sun left"
+          >
+            <Sun className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSunAzimuth(sunAzimuth + Math.PI / 18)}
+            className="toolbar-btn col-span-2"
+            title="Rotate sun right"
+          >
+            Sun +
+          </button>
+        </>
+      ) : null}
 
       <style jsx>{`
         .toolbar-btn {

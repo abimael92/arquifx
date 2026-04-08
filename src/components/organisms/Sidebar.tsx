@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BoxSelect,
   Cuboid,
   DoorOpen,
   Eraser,
@@ -37,9 +36,9 @@ const toolConfig: { tool: SelectedTool; icon: JSX.Element; hint: string }[] = [
 ];
 
 const modeConfig: { mode: BuildMode; label: string; icon: JSX.Element }[] = [
+  { mode: "view", label: "Vista", icon: <MousePointer2 className="h-4 w-4" /> },
   { mode: "build", label: "Construir", icon: <Hammer className="h-4 w-4" /> },
   { mode: "object", label: "Objetos", icon: <DoorOpen className="h-4 w-4" /> },
-  { mode: "select", label: "Seleccionar", icon: <BoxSelect className="h-4 w-4" /> },
   { mode: "demolish", label: "Demoler", icon: <Eraser className="h-4 w-4" /> },
 ];
 

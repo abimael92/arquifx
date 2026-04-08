@@ -19,9 +19,9 @@ const formatNumber = (value: number) =>
   });
 
 const modeLabels: Record<BuildMode, string> = {
+  view: "Vista",
   build: "Construir",
   object: "Objetos",
-  select: "Seleccionar",
   demolish: "Demoler",
 };
 

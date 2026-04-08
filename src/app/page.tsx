@@ -7,10 +7,11 @@ import { Button } from "@/components/atoms/Button";
 import { MeasurementCard } from "@/components/molecules/MeasurementCard";
 import { BottomStatusBar } from "@/components/organisms/BottomStatusBar";
 import { MiniMap } from "@/components/organisms/MiniMap";
+import { ModeSidebar } from "@/components/organisms/ModeSidebar";
 import { NavigationToolbar } from "@/components/organisms/NavigationToolbar";
 import { PropertyInspector } from "@/components/organisms/PropertyInspector";
+import { ProjectSetupModal } from "@/components/organisms/ProjectSetupModal";
 import { ProjectStatsCard } from "@/components/organisms/ProjectStatsCard";
-import { Sidebar } from "@/components/organisms/Sidebar";
 import { ViewSwitcher } from "@/components/organisms/ViewSwitcher";
 import { useProjectAutoSave } from "@/hooks/useProjectAutoSave";
 import { calculateProjectCost, calculateTotalFloorArea } from "@/lib/math";
@@ -23,7 +24,6 @@ export default function Home() {
   const { user, loading } = useRequireAuth();
 
   const selectedTool = useAppStore((state) => state.selectedTool);
-  const setSelectedTool = useAppStore((state) => state.setSelectedTool);
   const walls = useAppStore((state) => state.walls);
   const floors = useAppStore((state) => state.floors);
   const openings = useAppStore((state) => state.openings);
@@ -35,6 +35,7 @@ export default function Home() {
   const cameraPosition = useAppStore((state) => state.cameraPosition);
   const currentProject = useAppStore((state) => state.currentProject);
   const activeMode = useAppStore((state) => state.activeMode);
+  const projectInitialized = useAppStore((state) => state.projectInitialized);
   const activeLevelId = useAppStore((state) => state.activeLevelId);
   const levels = useAppStore((state) => state.levels);
   const openingRailConstrainedThresholdM = useAppStore((state) => state.openingRailConstrainedThresholdM);
@@ -129,7 +130,7 @@ export default function Home() {
   return (
     <main className="flex h-screen w-full flex-col bg-[radial-gradient(circle_at_20%_0%,#12233f_0%,#0b1220_35%,#070d18_100%)] text-slate-100">
       <div className="flex min-h-0 flex-1">
-        <Sidebar selectedTool={selectedTool} onSelectTool={setSelectedTool} />
+        <ModeSidebar />
 
         <section className="relative flex-1 border-r border-slate-800/90">
           <ViewSwitcher />
@@ -202,6 +203,8 @@ export default function Home() {
           {es.toast.saved}
         </div>
       ) : null}
+
+      {!projectInitialized ? <ProjectSetupModal /> : null}
     </main>
   );
 }
