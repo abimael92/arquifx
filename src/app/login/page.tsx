@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [redirectTarget, setRedirectTarget] = useState("/");
+  const [redirectTarget, setRedirectTarget] = useState("/dashboard");
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -25,7 +25,7 @@ export default function LoginPage() {
     }
 
     const params = new URLSearchParams(window.location.search);
-    setRedirectTarget(params.get("redirect") || "/");
+    setRedirectTarget(params.get("redirect") || "/dashboard");
   }, []);
 
   useEffect(() => {

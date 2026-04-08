@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Outlines } from "@react-three/drei";
+import { ThreeEvent } from "@react-three/fiber";
 
 import { Opening as OpeningType, Wall } from "@/types/project.types";
 
@@ -9,10 +10,27 @@ interface OpeningProps {
   opening: OpeningType;
   wall: Wall;
   isSelected: boolean;
+  isHighlighted?: boolean;
   onSelect: (openingId: string) => void;
+  onOpeningPointerDown?: (opening: OpeningType, event: ThreeEvent<PointerEvent>) => void;
+  onOpeningPointerUp?: (opening: OpeningType, event: ThreeEvent<PointerEvent>) => void;
+  onOpeningPointerMove?: (opening: OpeningType, event: ThreeEvent<PointerEvent>) => void;
+  onOpeningPointerEnter?: (opening: OpeningType) => void;
+  onOpeningPointerLeave?: (opening: OpeningType) => void;
 }
 
-export function Opening({ opening, wall, isSelected, onSelect }: OpeningProps) {
+export function Opening({
+  opening,
+  wall,
+  isSelected,
+  isHighlighted = false,
+  onSelect,
+  onOpeningPointerDown,
+  onOpeningPointerUp,
+  onOpeningPointerMove,
+  onOpeningPointerEnter,
+  onOpeningPointerLeave,
+}: OpeningProps) {
   const { position, rotationY } = useMemo(() => {
     const dx = wall.endPoint.x - wall.startPoint.x;
     const dz = wall.endPoint.z - wall.startPoint.z;
@@ -31,12 +49,28 @@ export function Opening({ opening, wall, isSelected, onSelect }: OpeningProps) {
   }, [opening, wall]);
 
   const baseColor = opening.type === "puerta" ? "#8b5a2b" : "#2563eb";
-  const color = isSelected ? "#facc15" : baseColor;
+  const color = isHighlighted ? "#ef4444" : isSelected ? "#facc15" : baseColor;
 
   return (
     <mesh
       position={position}
       rotation={[0, rotationY, 0]}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        onOpeningPointerDown?.(opening, event);
+      }}
+      onPointerUp={(event) => {
+        onOpeningPointerUp?.(opening, event);
+      }}
+      onPointerMove={(event) => {
+        onOpeningPointerMove?.(opening, event);
+      }}
+      onPointerEnter={() => {
+        onOpeningPointerEnter?.(opening);
+      }}
+      onPointerLeave={() => {
+        onOpeningPointerLeave?.(opening);
+      }}
       onClick={(event) => {
         event.stopPropagation();
         onSelect(opening.id);
@@ -44,7 +78,8 @@ export function Opening({ opening, wall, isSelected, onSelect }: OpeningProps) {
     >
       <boxGeometry args={[opening.width, opening.height, wall.thickness * 1.05]} />
       <meshStandardMaterial color={color} transparent opacity={0.45} />
-      {isSelected ? <Outlines color="#facc15" thickness={3} transparent /> : null}
+      {isHighlighted ? <Outlines color="#ef4444" thickness={3} transparent /> : null}
+      {!isHighlighted && isSelected ? <Outlines color="#facc15" thickness={3} transparent /> : null}
     </mesh>
   );
 }
