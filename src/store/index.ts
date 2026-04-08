@@ -2,10 +2,17 @@ import { create } from "zustand";
 import { v4 as uuidv4 } from "uuid";
 
 import {
+  BuildMode,
+  BuildSubtool,
+  DragState,
   Floor,
+  Level,
+  LotConstraint,
+  ObjectType,
   Opening,
   Project,
   ProjectSettings,
+  Room,
   Vector3D,
   Wall,
 } from "@/types/project.types";
@@ -61,6 +68,37 @@ interface UiSlice {
   setCameraPosition: (position: Vector3D) => void;
 }
 
+interface BuildFlowSlice {
+  activeMode: BuildMode;
+  activeBuildSubtool: BuildSubtool;
+  activeObjectType: ObjectType;
+  dragState: DragState;
+  setActiveMode: (mode: BuildMode) => void;
+  setActiveBuildSubtool: (subtool: BuildSubtool) => void;
+  setActiveObjectType: (objectType: ObjectType) => void;
+  setDragState: (updates: Partial<DragState>) => void;
+  resetDragState: () => void;
+}
+
+interface LevelsSlice {
+  levels: Level[];
+  activeLevelId: string;
+  addLevel: (name?: string) => void;
+  setActiveLevel: (levelId: string) => void;
+  toggleLevelVisibility: (levelId: string) => void;
+}
+
+interface RoomsSlice {
+  rooms: Room[];
+  createRoomFromRectangle: (startPoint: Vector3D, endPoint: Vector3D) => void;
+  deleteRoom: (roomId: string) => void;
+}
+
+interface LotSlice {
+  lot: LotConstraint;
+  setLot: (updates: Partial<LotConstraint>) => void;
+}
+
 interface ProjectSlice {
   floors: Floor[];
   openings: Opening[];
@@ -82,6 +120,13 @@ interface UndoSnapshot {
   isDrawingMode: boolean;
   showGrid: boolean;
   cameraPosition: Vector3D;
+  activeMode: BuildMode;
+  activeBuildSubtool: BuildSubtool;
+  activeObjectType: ObjectType;
+  activeLevelId: string;
+  levels: Level[];
+  rooms: Room[];
+  lot: LotConstraint;
   currentProject: Project | null;
 }
 
@@ -94,7 +139,17 @@ interface UndoRedoSlice {
   canRedo: () => boolean;
 }
 
-type StoreState = WallsSlice & OpeningsSlice & FloorsSelectionSlice & UiSlice & ProjectSlice & UndoRedoSlice;
+type StoreState =
+  & WallsSlice
+  & OpeningsSlice
+  & FloorsSelectionSlice
+  & UiSlice
+  & BuildFlowSlice
+  & LevelsSlice
+  & RoomsSlice
+  & LotSlice
+  & ProjectSlice
+  & UndoRedoSlice;
 
 const defaultSettings: ProjectSettings = {
   gridSnap: 0.1,
@@ -104,6 +159,39 @@ const defaultSettings: ProjectSettings = {
 };
 
 const defaultCameraPosition: Vector3D = { x: 8, y: 6, z: 8 };
+const defaultLevelId = "level-0";
+const defaultLevels: Level[] = [
+  {
+    id: defaultLevelId,
+    index: 0,
+    name: "Nivel 1",
+    elevation: 0,
+    height: 2.8,
+    visible: true,
+    locked: false,
+  },
+];
+
+const defaultLot: LotConstraint = {
+  id: "lot-1",
+  width: 20,
+  length: 20,
+  maxHeight: 9,
+  maxLevels: 3,
+  origin: { x: 0, y: 0, z: 0 },
+};
+
+const defaultDragState: DragState = {
+  active: false,
+  pointerId: null,
+  mode: "build",
+  subtool: "wall",
+  startWorld: null,
+  currentWorld: null,
+  snappedWorld: null,
+  previewEntityIds: [],
+  metrics: {},
+};
 
 const calculateStatistics = (walls: Wall[], floors: Floor[], openings: Opening[]) => {
   const totalAreaM2 = floors.reduce((acc, floor) => acc + floor.areaM2, 0);
@@ -122,6 +210,9 @@ const buildProject = (
   walls: Wall[],
   floors: Floor[],
   openings: Opening[],
+  rooms: Room[],
+  levels: Level[],
+  lot: LotConstraint,
   settings: ProjectSettings,
 ): Project => ({
   id,
@@ -129,6 +220,9 @@ const buildProject = (
   walls,
   floors,
   openings,
+  rooms,
+  levels,
+  lot,
   settings,
   statistics: calculateStatistics(walls, floors, openings),
 });
@@ -144,6 +238,13 @@ const makeSnapshot = (state: StoreState): UndoSnapshot => ({
   isDrawingMode: state.isDrawingMode,
   showGrid: state.showGrid,
   cameraPosition: state.cameraPosition,
+  activeMode: state.activeMode,
+  activeBuildSubtool: state.activeBuildSubtool,
+  activeObjectType: state.activeObjectType,
+  activeLevelId: state.activeLevelId,
+  levels: state.levels,
+  rooms: state.rooms,
+  lot: state.lot,
   currentProject: state.currentProject,
 });
 
@@ -177,6 +278,14 @@ export const useAppStore = create<StoreState>((set, get) => {
     isDrawingMode: false,
     showGrid: true,
     cameraPosition: defaultCameraPosition,
+    activeMode: "select",
+    activeBuildSubtool: "wall",
+    activeObjectType: "puerta",
+    dragState: defaultDragState,
+    levels: defaultLevels,
+    activeLevelId: defaultLevelId,
+    rooms: [],
+    lot: defaultLot,
     currentProject: null,
     historyPast: [],
     historyFuture: [],
@@ -191,6 +300,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               walls,
               state.floors,
               state.openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -209,6 +321,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               walls,
               state.floors,
               state.openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -233,6 +348,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               walls,
               state.floors,
               openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -277,6 +395,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               state.walls,
               state.floors,
               openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -301,6 +422,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               state.walls,
               state.floors,
               openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -320,6 +444,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               state.walls,
               state.floors,
               openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -339,7 +466,17 @@ export const useAppStore = create<StoreState>((set, get) => {
     setSelectedTool: (tool) => {
       set({
         selectedTool: tool,
-        isDrawingMode: tool === "Muros",
+        isDrawingMode: tool === "Muros" || tool === "Suelos",
+        activeMode:
+          tool === "Muros" || tool === "Suelos"
+            ? "build"
+            : tool === "Puertas" || tool === "Ventanas"
+              ? "object"
+              : tool === "Eliminar"
+                ? "demolish"
+                : "select",
+        activeBuildSubtool: tool === "Suelos" ? "room" : tool === "Muros" ? "wall" : get().activeBuildSubtool,
+        activeObjectType: tool === "Ventanas" ? "ventana" : tool === "Puertas" ? "puerta" : get().activeObjectType,
       });
     },
 
@@ -355,6 +492,212 @@ export const useAppStore = create<StoreState>((set, get) => {
       set({ cameraPosition: position });
     },
 
+    setActiveMode: (mode) => {
+      set({ activeMode: mode });
+    },
+
+    setActiveBuildSubtool: (subtool) => {
+      set({ activeBuildSubtool: subtool });
+    },
+
+    setActiveObjectType: (objectType) => {
+      set({ activeObjectType: objectType });
+    },
+
+    setDragState: (updates) => {
+      set((state) => ({
+        dragState: { ...state.dragState, ...updates },
+      }));
+    },
+
+    resetDragState: () => {
+      set({ dragState: defaultDragState });
+    },
+
+    addLevel: (name) => {
+      applyWithHistory((state) => {
+        const nextIndex = state.levels.length;
+        const elevation = state.levels.reduce((acc, level) => Math.max(acc, level.elevation + level.height), 0);
+        const level: Level = {
+          id: uuidv4(),
+          index: nextIndex,
+          name: name ?? `Nivel ${nextIndex + 1}`,
+          elevation,
+          height: state.currentProject?.settings.defaultWallHeight ?? defaultSettings.defaultWallHeight,
+          visible: true,
+          locked: false,
+        };
+
+        const levels = [...state.levels, level];
+        const currentProject = state.currentProject
+          ? buildProject(
+              state.currentProject.id,
+              state.currentProject.name,
+              state.walls,
+              state.floors,
+              state.openings,
+              state.rooms,
+              levels,
+              state.lot,
+              state.currentProject.settings,
+            )
+          : null;
+
+        return { levels, activeLevelId: level.id, currentProject };
+      });
+    },
+
+    setActiveLevel: (levelId) => {
+      set({ activeLevelId: levelId });
+    },
+
+    toggleLevelVisibility: (levelId) => {
+      applyWithHistory((state) => {
+        const levels = state.levels.map((level) =>
+          level.id === levelId ? { ...level, visible: !level.visible } : level,
+        );
+        const currentProject = state.currentProject
+          ? buildProject(
+              state.currentProject.id,
+              state.currentProject.name,
+              state.walls,
+              state.floors,
+              state.openings,
+              state.rooms,
+              levels,
+              state.lot,
+              state.currentProject.settings,
+            )
+          : null;
+
+        return { levels, currentProject };
+      });
+    },
+
+    createRoomFromRectangle: (startPoint, endPoint) => {
+      applyWithHistory((state) => {
+        const minX = Math.min(startPoint.x, endPoint.x);
+        const maxX = Math.max(startPoint.x, endPoint.x);
+        const minZ = Math.min(startPoint.z, endPoint.z);
+        const maxZ = Math.max(startPoint.z, endPoint.z);
+        const width = maxX - minX;
+        const length = maxZ - minZ;
+
+        if (width < 0.2 || length < 0.2) {
+          return {};
+        }
+
+        const activeLevel = state.levels.find((level) => level.id === state.activeLevelId) ?? state.levels[0];
+        const baseY = activeLevel?.elevation ?? 0;
+        const roomId = uuidv4();
+        const wallHeight = state.currentProject?.settings.defaultWallHeight ?? defaultSettings.defaultWallHeight;
+
+        const p1: Vector3D = { x: minX, y: baseY, z: minZ };
+        const p2: Vector3D = { x: maxX, y: baseY, z: minZ };
+        const p3: Vector3D = { x: maxX, y: baseY, z: maxZ };
+        const p4: Vector3D = { x: minX, y: baseY, z: maxZ };
+
+        const makeWall = (start: Vector3D, end: Vector3D): Wall => ({
+          id: uuidv4(),
+          levelId: activeLevel?.id,
+          roomIds: [roomId],
+          startPoint: start,
+          endPoint: end,
+          height: wallHeight,
+          thickness: 0.2,
+          materialType: "ladrillo",
+          layer: "muros",
+          isLoadBearing: false,
+        });
+
+        const roomWalls = [
+          makeWall(p1, p2),
+          makeWall(p2, p3),
+          makeWall(p3, p4),
+          makeWall(p4, p1),
+        ];
+
+        const room: Room = {
+          id: roomId,
+          levelId: activeLevel?.id ?? defaultLevelId,
+          boundary: [p1, p2, p3, p4],
+          areaM2: width * length,
+          wallIds: roomWalls.map((wall) => wall.id),
+          isValid: true,
+        };
+
+        const walls = [...state.walls, ...roomWalls];
+        const rooms = [...state.rooms, room];
+
+        const currentProject = state.currentProject
+          ? buildProject(
+              state.currentProject.id,
+              state.currentProject.name,
+              walls,
+              state.floors,
+              state.openings,
+              rooms,
+              state.levels,
+              state.lot,
+              state.currentProject.settings,
+            )
+          : null;
+
+        return { walls, rooms, currentProject };
+      });
+    },
+
+    deleteRoom: (roomId) => {
+      applyWithHistory((state) => {
+        const room = state.rooms.find((item) => item.id === roomId);
+        if (!room) {
+          return {};
+        }
+
+        const roomWallIds = new Set(room.wallIds);
+        const walls = state.walls.filter((wall) => !roomWallIds.has(wall.id));
+        const openings = state.openings.filter((opening) => !roomWallIds.has(opening.wallId));
+        const rooms = state.rooms.filter((item) => item.id !== roomId);
+
+        const currentProject = state.currentProject
+          ? buildProject(
+              state.currentProject.id,
+              state.currentProject.name,
+              walls,
+              state.floors,
+              openings,
+              rooms,
+              state.levels,
+              state.lot,
+              state.currentProject.settings,
+            )
+          : null;
+
+        return { walls, openings, rooms, currentProject };
+      });
+    },
+
+    setLot: (updates) => {
+      applyWithHistory((state) => {
+        const lot = { ...state.lot, ...updates };
+        const currentProject = state.currentProject
+          ? buildProject(
+              state.currentProject.id,
+              state.currentProject.name,
+              state.walls,
+              state.floors,
+              state.openings,
+              state.rooms,
+              state.levels,
+              lot,
+              state.currentProject.settings,
+            )
+          : null;
+
+        return { lot, currentProject };
+      });
+    },
+
     setFloors: (floors) => {
       applyWithHistory((state) => {
         const currentProject = state.currentProject
@@ -364,6 +707,9 @@ export const useAppStore = create<StoreState>((set, get) => {
               state.walls,
               floors,
               state.openings,
+              state.rooms,
+              state.levels,
+              state.lot,
               state.currentProject.settings,
             )
           : null;
@@ -385,6 +731,9 @@ export const useAppStore = create<StoreState>((set, get) => {
         state.walls,
         state.floors,
         state.openings,
+        state.rooms,
+        state.levels,
+        state.lot,
         projectSettings,
       );
 
@@ -398,6 +747,10 @@ export const useAppStore = create<StoreState>((set, get) => {
         walls: project.walls,
         floors: project.floors,
         openings: project.openings,
+        rooms: project.rooms ?? [],
+        levels: project.levels?.length ? project.levels : defaultLevels,
+        lot: project.lot ?? defaultLot,
+        activeLevelId: project.levels?.[0]?.id ?? defaultLevelId,
         showGrid: project.settings.showGrid,
         selectedWallId: null,
         selectedOpeningId: null,
@@ -413,6 +766,9 @@ export const useAppStore = create<StoreState>((set, get) => {
           [],
           [],
           [],
+          [],
+          defaultLevels,
+          defaultLot,
           { ...defaultSettings, showGrid: state.showGrid },
         );
 
@@ -421,6 +777,10 @@ export const useAppStore = create<StoreState>((set, get) => {
           walls: [],
           floors: [],
           openings: [],
+          rooms: [],
+          levels: defaultLevels,
+          activeLevelId: defaultLevelId,
+          lot: defaultLot,
           selectedWallId: null,
           selectedOpeningId: null,
           selectedFloorId: null,
