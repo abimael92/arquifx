@@ -1,9 +1,9 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas, ThreeEvent } from "@react-three/fiber";
+import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BufferAttribute, BufferGeometry } from "three";
+import { BufferAttribute, BufferGeometry, Mesh } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { useFloorDetection } from "@/hooks/useFloorDetection";
@@ -40,17 +40,29 @@ function OpeningRail({
   start,
   end,
   marker,
+  isConstrained,
 }: {
   points: [number, number, number, number, number, number];
   start: [number, number, number];
   end: [number, number, number];
   marker: [number, number, number];
+  isConstrained: boolean;
 }) {
+  const markerRef = useRef<Mesh>(null);
   const geometry = useMemo(() => {
     const nextGeometry = new BufferGeometry();
     nextGeometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3));
     return nextGeometry;
   }, [points]);
+
+  useFrame((state) => {
+    if (!markerRef.current) {
+      return;
+    }
+
+    const pulse = 1 + Math.sin(state.clock.elapsedTime * 6.5) * 0.15;
+    markerRef.current.scale.setScalar(pulse);
+  });
 
   useEffect(() => {
     return () => geometry.dispose();
@@ -59,22 +71,34 @@ function OpeningRail({
   return (
     <group>
       <lineSegments geometry={geometry}>
-        <lineBasicMaterial color="#f59e0b" linewidth={2} />
+        <lineBasicMaterial color={isConstrained ? "#fb7185" : "#f59e0b"} linewidth={2} />
       </lineSegments>
 
       <mesh position={start}>
         <sphereGeometry args={[0.05, 10, 10]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#78350f" emissiveIntensity={0.4} />
+        <meshStandardMaterial
+          color={isConstrained ? "#fb7185" : "#f59e0b"}
+          emissive={isConstrained ? "#881337" : "#78350f"}
+          emissiveIntensity={0.4}
+        />
       </mesh>
 
       <mesh position={end}>
         <sphereGeometry args={[0.05, 10, 10]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#78350f" emissiveIntensity={0.4} />
+        <meshStandardMaterial
+          color={isConstrained ? "#fb7185" : "#f59e0b"}
+          emissive={isConstrained ? "#881337" : "#78350f"}
+          emissiveIntensity={0.4}
+        />
       </mesh>
 
-      <mesh position={marker}>
+      <mesh ref={markerRef} position={marker}>
         <sphereGeometry args={[0.045, 10, 10]} />
-        <meshStandardMaterial color="#22d3ee" emissive="#0e7490" emissiveIntensity={0.5} />
+        <meshStandardMaterial
+          color={isConstrained ? "#fb7185" : "#22d3ee"}
+          emissive={isConstrained ? "#881337" : "#0e7490"}
+          emissiveIntensity={0.55}
+        />
       </mesh>
     </group>
   );
@@ -302,6 +326,7 @@ export function Scene() {
     start: [number, number, number];
     end: [number, number, number];
     marker: [number, number, number];
+    isConstrained: boolean;
   } | null>(() => {
     if (!openingPreview) {
       return null;
@@ -316,12 +341,19 @@ export function Scene() {
     const start: [number, number, number] = [wall.startPoint.x, railY, wall.startPoint.z];
     const end: [number, number, number] = [wall.endPoint.x, railY, wall.endPoint.z];
     const marker: [number, number, number] = [openingPreview.center[0], railY, openingPreview.center[2]];
+    const wallLength = Math.sqrt(
+      (wall.endPoint.x - wall.startPoint.x) * (wall.endPoint.x - wall.startPoint.x) +
+        (wall.endPoint.z - wall.startPoint.z) * (wall.endPoint.z - wall.startPoint.z),
+    );
+    const remainingSpan = wallLength - openingPreview.width;
+    const isConstrained = remainingSpan <= 0.12;
 
     return {
       points: [start[0], start[1], start[2], end[0], end[1], end[2]],
       start,
       end,
       marker,
+      isConstrained,
     };
   }, [openingPreview, visibleWalls]);
 
@@ -681,6 +713,7 @@ export function Scene() {
             start={openingRail.start}
             end={openingRail.end}
             marker={openingRail.marker}
+            isConstrained={openingRail.isConstrained}
           />
         ) : null}
 
