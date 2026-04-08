@@ -29,6 +29,7 @@ export interface Wall {
   materialType: MaterialType;
   layer: string;
   isLoadBearing: boolean;
+  hasInsulation: boolean;
 }
 
 export interface Opening {

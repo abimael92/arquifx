@@ -195,6 +195,7 @@ export function useWallDrawing() {
           materialType: "ladrillo",
           layer: "muros",
           isLoadBearing: false,
+          hasInsulation: false,
         });
       }
 

@@ -326,6 +326,7 @@ const clampPointToLot = (point: Vector3D, lot: LotConstraint): Vector3D => {
 
 const clampWallToLot = (wall: Wall, lot: LotConstraint): Wall => ({
   ...wall,
+  hasInsulation: wall.hasInsulation ?? false,
   startPoint: clampPointToLot(wall.startPoint, lot),
   endPoint: clampPointToLot(wall.endPoint, lot),
 });
@@ -844,6 +845,7 @@ export const useAppStore = create<StoreState>((set, get) => {
           materialType: "ladrillo",
           layer: "muros",
           isLoadBearing: false,
+          hasInsulation: false,
         });
 
         const roomWalls = [
@@ -1050,12 +1052,18 @@ export const useAppStore = create<StoreState>((set, get) => {
         ...project.settings,
       };
 
+      const normalizedWalls = project.walls.map((wall) => ({
+        ...wall,
+        hasInsulation: wall.hasInsulation ?? false,
+      }));
+
       applyWithHistory(() => ({
         currentProject: {
           ...project,
+          walls: normalizedWalls,
           settings: resolvedSettings,
         },
-        walls: project.walls,
+        walls: normalizedWalls,
         floors: project.floors,
         openings: project.openings,
         rooms: project.rooms ?? [],
