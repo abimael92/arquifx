@@ -28,6 +28,18 @@ const toSnappedPoint = (point: Vector3, y: number, snapSize: number): Vector3D =
   z: snapValue(point.z, snapSize),
 });
 
+const clampPointToTerrain = (point: Vector3D, width: number, length: number): { point: Vector3D; wasClamped: boolean } => {
+  const halfWidth = width / 2;
+  const halfLength = length / 2;
+  const clampedX = Math.min(halfWidth, Math.max(-halfWidth, point.x));
+  const clampedZ = Math.min(halfLength, Math.max(-halfLength, point.z));
+
+  return {
+    point: { ...point, x: clampedX, z: clampedZ },
+    wasClamped: clampedX !== point.x || clampedZ !== point.z,
+  };
+};
+
 const snapAngleFromStart = (startPoint: Vector3D, targetPoint: Vector3D, angleSnapDeg: number): Vector3D => {
   const dx = targetPoint.x - startPoint.x;
   const dz = targetPoint.z - startPoint.z;
@@ -65,6 +77,8 @@ export function useWallDrawing() {
   const selectWall = useAppStore((state) => state.selectWall);
   const selectOpening = useAppStore((state) => state.selectOpening);
   const selectFloor = useAppStore((state) => state.selectFloor);
+  const lot = useAppStore((state) => state.lot);
+  const setTerrainViolation = useAppStore((state) => state.setTerrainViolation);
 
   const [startPoint, setStartPoint] = useState<Vector3D | null>(null);
   const [currentPoint, setCurrentPoint] = useState<Vector3D | null>(null);
@@ -92,18 +106,22 @@ export function useWallDrawing() {
       const angleSnap = isPrecision ? PRECISE_ANGLE_SNAP_DEG : ANGLE_SNAP_DEG;
 
       const snapped = toSnappedPoint(intersection, baseY, snapSize);
+      const bounded = clampPointToTerrain(snapped, lot.width, lot.length);
       if (!start) {
-        return snapped;
+        setTerrainViolation(bounded.wasClamped);
+        return bounded.point;
       }
 
-      const angleSnapped = snapAngleFromStart(start, snapped, angleSnap);
-      return {
+      const angleSnapped = snapAngleFromStart(start, bounded.point, angleSnap);
+      const finalBounded = clampPointToTerrain({
         x: snapValue(angleSnapped.x, snapSize),
         y: baseY,
         z: snapValue(angleSnapped.z, snapSize),
-      };
+      }, lot.width, lot.length);
+      setTerrainViolation(bounded.wasClamped || finalBounded.wasClamped);
+      return finalBounded.point;
     },
-    [baseY, groundPlane],
+    [baseY, groundPlane, lot.length, lot.width, setTerrainViolation],
   );
 
   const onCanvasPointerMove = useCallback(
@@ -142,7 +160,8 @@ export function useWallDrawing() {
   const cancelDrawing = useCallback(() => {
     setStartPoint(null);
     setCurrentPoint(null);
-  }, []);
+    setTerrainViolation(false);
+  }, [setTerrainViolation]);
 
   const onCanvasPointerUp = useCallback(
     (event: ThreeEvent<PointerEvent>) => {

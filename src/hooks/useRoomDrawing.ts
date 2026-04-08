@@ -25,11 +25,25 @@ const toSnappedPoint = (point: Vector3, y: number, snapSize: number): Vector3D =
   z: snapToGrid(point.z, snapSize),
 });
 
+const clampPointToTerrain = (point: Vector3D, width: number, length: number): { point: Vector3D; wasClamped: boolean } => {
+  const halfWidth = width / 2;
+  const halfLength = length / 2;
+  const clampedX = Math.min(halfWidth, Math.max(-halfWidth, point.x));
+  const clampedZ = Math.min(halfLength, Math.max(-halfLength, point.z));
+
+  return {
+    point: { ...point, x: clampedX, z: clampedZ },
+    wasClamped: clampedX !== point.x || clampedZ !== point.z,
+  };
+};
+
 export function useRoomDrawing() {
   const selectedTool = useAppStore((state) => state.selectedTool);
   const activeLevelId = useAppStore((state) => state.activeLevelId);
   const levels = useAppStore((state) => state.levels);
   const createRoomFromRectangle = useAppStore((state) => state.createRoomFromRectangle);
+  const lot = useAppStore((state) => state.lot);
+  const setTerrainViolation = useAppStore((state) => state.setTerrainViolation);
 
   const [startPoint, setStartPoint] = useState<Vector3D | null>(null);
   const [currentPoint, setCurrentPoint] = useState<Vector3D | null>(null);
@@ -52,15 +66,19 @@ export function useRoomDrawing() {
       }
 
       const snapSize = event.nativeEvent.ctrlKey ? PRECISE_SNAP_SIZE : SNAP_SIZE;
-      return toSnappedPoint(intersection, baseY, snapSize);
+      const snapped = toSnappedPoint(intersection, baseY, snapSize);
+      const bounded = clampPointToTerrain(snapped, lot.width, lot.length);
+      setTerrainViolation(bounded.wasClamped);
+      return bounded.point;
     },
-    [baseY, groundPlane],
+    [baseY, groundPlane, lot.length, lot.width, setTerrainViolation],
   );
 
   const cancelDrawing = useCallback(() => {
     setStartPoint(null);
     setCurrentPoint(null);
-  }, []);
+    setTerrainViolation(false);
+  }, [setTerrainViolation]);
 
   const onCanvasPointerDown = useCallback(
     (event: ThreeEvent<PointerEvent>) => {

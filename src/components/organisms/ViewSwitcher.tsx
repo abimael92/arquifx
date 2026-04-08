@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Layers, Map } from "lucide-react";
+import { Eye, Layers, Map, Sun } from "lucide-react";
 
 import { useAppStore } from "@/store";
 import { ViewMode } from "@/types/project.types";
@@ -9,6 +9,7 @@ const viewConfig: { mode: ViewMode; label: string; icon: JSX.Element }[] = [
   { mode: "blueprint", label: "Blueprint", icon: <Map className="h-4 w-4" /> },
   { mode: "3d", label: "3D", icon: <Eye className="h-4 w-4" /> },
   { mode: "top", label: "Top", icon: <Layers className="h-4 w-4" /> },
+  { mode: "realistic", label: "Realistic", icon: <Sun className="h-4 w-4" /> },
 ];
 
 export function ViewSwitcher() {

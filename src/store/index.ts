@@ -7,6 +7,7 @@ import {
   CameraControlMode,
   CameraState,
   DragState,
+  EditorProjectSettings,
   Floor,
   Level,
   LotConstraint,
@@ -76,6 +77,9 @@ interface UiSlice {
     target: CameraState;
   } | null;
   openingRailConstrainedThresholdM: number;
+  realisticShadows: boolean;
+  sunAzimuth: number;
+  terrainViolation: boolean;
   setSelectedTool: (tool: SelectedTool) => void;
   setIsDrawingMode: (enabled: boolean) => void;
   setShowGrid: (visible: boolean) => void;
@@ -88,13 +92,18 @@ interface UiSlice {
   transitionCameraTo: (mode: ViewMode, target: Partial<CameraState>) => void;
   clearCameraTransition: () => void;
   setOpeningRailConstrainedThresholdM: (value: number) => void;
+  setRealisticShadows: (enabled: boolean) => void;
+  setSunAzimuth: (azimuth: number) => void;
+  setTerrainViolation: (active: boolean) => void;
 }
 
 interface BuildFlowSlice {
+  mode: BuildMode;
   activeMode: BuildMode;
   activeBuildSubtool: BuildSubtool;
   activeObjectType: ObjectType;
   dragState: DragState;
+  setMode: (mode: BuildMode) => void;
   setActiveMode: (mode: BuildMode) => void;
   setActiveBuildSubtool: (subtool: BuildSubtool) => void;
   setActiveObjectType: (objectType: ObjectType) => void;
@@ -125,7 +134,10 @@ interface ProjectSlice {
   floors: Floor[];
   openings: Opening[];
   currentProject: Project | null;
+  projectInitialized: boolean;
+  projectSettings: EditorProjectSettings;
   setFloors: (floors: Floor[]) => void;
+  initializeProjectSetup: (settings: EditorProjectSettings) => void;
   saveProject: () => Project;
   loadProject: (project: Project) => void;
   newProject: (name?: string) => void;
@@ -153,6 +165,12 @@ interface UndoSnapshot {
     target: CameraState;
   } | null;
   openingRailConstrainedThresholdM: number;
+  realisticShadows: boolean;
+  sunAzimuth: number;
+  terrainViolation: boolean;
+  projectInitialized: boolean;
+  projectSettings: EditorProjectSettings;
+  mode: BuildMode;
   activeMode: BuildMode;
   activeBuildSubtool: BuildSubtool;
   activeObjectType: ObjectType;
@@ -212,6 +230,12 @@ const defaultCameraStates: Record<ViewMode, CameraState> = {
     zoom: 36,
     rotation: { x: -Math.PI / 2, y: 0, z: 0 },
   },
+  realistic: {
+    position: { x: 10, y: 7, z: 10 },
+    target: { x: 0, y: 0, z: 0 },
+    zoom: 1,
+    rotation: { x: 0, y: 0, z: 0 },
+  },
 };
 const defaultLevelId = "level-0";
 const defaultLevels: Level[] = [
@@ -233,6 +257,14 @@ const defaultLot: LotConstraint = {
   maxHeight: 9,
   maxLevels: 3,
   origin: { x: 0, y: 0, z: 0 },
+};
+
+const defaultEditorProjectSettings: EditorProjectSettings = {
+  name: "",
+  terrainWidth: defaultLot.width,
+  terrainLength: defaultLot.length,
+  maxHeight: defaultLot.maxHeight,
+  maxFloors: defaultLot.maxLevels,
 };
 
 const defaultDragState: DragState = {
@@ -281,6 +313,23 @@ const buildProject = (
   statistics: calculateStatistics(walls, floors, openings),
 });
 
+const clampPointToLot = (point: Vector3D, lot: LotConstraint): Vector3D => {
+  const halfWidth = lot.width / 2;
+  const halfLength = lot.length / 2;
+
+  return {
+    ...point,
+    x: Math.min(halfWidth, Math.max(-halfWidth, point.x)),
+    z: Math.min(halfLength, Math.max(-halfLength, point.z)),
+  };
+};
+
+const clampWallToLot = (wall: Wall, lot: LotConstraint): Wall => ({
+  ...wall,
+  startPoint: clampPointToLot(wall.startPoint, lot),
+  endPoint: clampPointToLot(wall.endPoint, lot),
+});
+
 const makeSnapshot = (state: StoreState): UndoSnapshot => ({
   walls: state.walls,
   floors: state.floors,
@@ -299,6 +348,12 @@ const makeSnapshot = (state: StoreState): UndoSnapshot => ({
   cameraStates: state.cameraStates,
   cameraTransition: state.cameraTransition,
   openingRailConstrainedThresholdM: state.openingRailConstrainedThresholdM,
+  realisticShadows: state.realisticShadows,
+  sunAzimuth: state.sunAzimuth,
+  terrainViolation: state.terrainViolation,
+  projectInitialized: state.projectInitialized,
+  projectSettings: state.projectSettings,
+  mode: state.mode,
   activeMode: state.activeMode,
   activeBuildSubtool: state.activeBuildSubtool,
   activeObjectType: state.activeObjectType,
@@ -346,7 +401,11 @@ export const useAppStore = create<StoreState>((set, get) => {
     cameraStates: defaultCameraStates,
     cameraTransition: null,
     openingRailConstrainedThresholdM: defaultSettings.openingRailConstrainedThresholdM,
-    activeMode: "select",
+    realisticShadows: true,
+    sunAzimuth: Math.PI / 4,
+    terrainViolation: false,
+    mode: "view",
+    activeMode: "view",
     activeBuildSubtool: "wall",
     activeObjectType: "puerta",
     dragState: defaultDragState,
@@ -355,12 +414,15 @@ export const useAppStore = create<StoreState>((set, get) => {
     rooms: [],
     lot: defaultLot,
     currentProject: null,
+    projectInitialized: false,
+    projectSettings: defaultEditorProjectSettings,
     historyPast: [],
     historyFuture: [],
 
     addWall: (wall) => {
       applyWithHistory((state) => {
-        const walls = [...state.walls, wall];
+        const boundedWall = clampWallToLot(wall, state.lot);
+        const walls = [...state.walls, boundedWall];
         const currentProject = state.currentProject
           ? buildProject(
               state.currentProject.id,
@@ -381,7 +443,13 @@ export const useAppStore = create<StoreState>((set, get) => {
 
     updateWall: (id, updates) => {
       applyWithHistory((state) => {
-        const walls = state.walls.map((wall) => (wall.id === id ? { ...wall, ...updates } : wall));
+        const walls = state.walls.map((wall) => {
+          if (wall.id !== id) {
+            return wall;
+          }
+
+          return clampWallToLot({ ...wall, ...updates }, state.lot);
+        });
         const currentProject = state.currentProject
           ? buildProject(
               state.currentProject.id,
@@ -542,7 +610,15 @@ export const useAppStore = create<StoreState>((set, get) => {
               ? "object"
               : tool === "Eliminar"
                 ? "demolish"
-                : "select",
+                : "view",
+        mode:
+          tool === "Muros" || tool === "Suelos"
+            ? "build"
+            : tool === "Puertas" || tool === "Ventanas"
+              ? "object"
+              : tool === "Eliminar"
+                ? "demolish"
+                : "view",
         activeBuildSubtool: tool === "Suelos" ? "room" : tool === "Muros" ? "wall" : get().activeBuildSubtool,
         activeObjectType: tool === "Ventanas" ? "ventana" : tool === "Puertas" ? "puerta" : get().activeObjectType,
       });
@@ -634,8 +710,24 @@ export const useAppStore = create<StoreState>((set, get) => {
       });
     },
 
+    setRealisticShadows: (enabled) => {
+      set({ realisticShadows: enabled });
+    },
+
+    setSunAzimuth: (azimuth) => {
+      set({ sunAzimuth: azimuth });
+    },
+
+    setTerrainViolation: (active) => {
+      set({ terrainViolation: active });
+    },
+
+    setMode: (mode) => {
+      set({ mode, activeMode: mode });
+    },
+
     setActiveMode: (mode) => {
-      set({ activeMode: mode });
+      set({ activeMode: mode, mode });
     },
 
     setActiveBuildSubtool: (subtool) => {
@@ -718,10 +810,12 @@ export const useAppStore = create<StoreState>((set, get) => {
 
     createRoomFromRectangle: (startPoint, endPoint) => {
       applyWithHistory((state) => {
-        const minX = Math.min(startPoint.x, endPoint.x);
-        const maxX = Math.max(startPoint.x, endPoint.x);
-        const minZ = Math.min(startPoint.z, endPoint.z);
-        const maxZ = Math.max(startPoint.z, endPoint.z);
+        const boundedStart = clampPointToLot(startPoint, state.lot);
+        const boundedEnd = clampPointToLot(endPoint, state.lot);
+        const minX = Math.min(boundedStart.x, boundedEnd.x);
+        const maxX = Math.max(boundedStart.x, boundedEnd.x);
+        const minZ = Math.min(boundedStart.z, boundedEnd.z);
+        const maxZ = Math.max(boundedStart.z, boundedEnd.z);
         const width = maxX - minX;
         const length = maxZ - minZ;
 
@@ -822,6 +916,13 @@ export const useAppStore = create<StoreState>((set, get) => {
     setLot: (updates) => {
       applyWithHistory((state) => {
         const lot = { ...state.lot, ...updates };
+        const projectSettings = {
+          ...state.projectSettings,
+          terrainWidth: lot.width,
+          terrainLength: lot.length,
+          maxHeight: lot.maxHeight,
+          maxFloors: lot.maxLevels,
+        };
         const currentProject = state.currentProject
           ? buildProject(
               state.currentProject.id,
@@ -836,7 +937,62 @@ export const useAppStore = create<StoreState>((set, get) => {
             )
           : null;
 
-        return { lot, currentProject };
+        return { lot, currentProject, projectSettings };
+      });
+    },
+
+    initializeProjectSetup: (settings) => {
+      applyWithHistory(() => {
+        const lot: LotConstraint = {
+          id: "lot-1",
+          width: Math.max(4, settings.terrainWidth),
+          length: Math.max(4, settings.terrainLength),
+          maxHeight: Math.max(3, settings.maxHeight ?? defaultLot.maxHeight),
+          maxLevels: Math.max(1, settings.maxFloors ?? defaultLot.maxLevels),
+          origin: { x: 0, y: 0, z: 0 },
+        };
+
+        const projectSettings: EditorProjectSettings = {
+          name: settings.name.trim() || "Nuevo proyecto",
+          terrainWidth: lot.width,
+          terrainLength: lot.length,
+          maxHeight: lot.maxHeight,
+          maxFloors: lot.maxLevels,
+        };
+
+        const project = buildProject(
+          uuidv4(),
+          projectSettings.name,
+          [],
+          [],
+          [],
+          [],
+          defaultLevels,
+          lot,
+          { ...defaultSettings, showGrid: true },
+        );
+
+        return {
+          currentProject: project,
+          walls: [],
+          floors: [],
+          openings: [],
+          rooms: [],
+          levels: defaultLevels,
+          activeLevelId: defaultLevelId,
+          lot,
+          projectInitialized: true,
+          projectSettings,
+          selectedTool: "Seleccionar",
+          mode: "view",
+          activeMode: "view",
+          viewMode: "3d",
+          cameraControlMode: "orbit",
+          cameraStates: defaultCameraStates,
+          cameraTransition: null,
+          terrainViolation: false,
+          sunAzimuth: Math.PI / 4,
+        };
       });
     },
 
@@ -914,6 +1070,19 @@ export const useAppStore = create<StoreState>((set, get) => {
         cameraStates: defaultCameraStates,
         cameraTransition: null,
         openingRailConstrainedThresholdM: resolvedSettings.openingRailConstrainedThresholdM,
+        realisticShadows: true,
+        sunAzimuth: Math.PI / 4,
+        terrainViolation: false,
+        projectInitialized: true,
+        projectSettings: {
+          name: project.name,
+          terrainWidth: project.lot?.width ?? defaultLot.width,
+          terrainLength: project.lot?.length ?? defaultLot.length,
+          maxHeight: project.lot?.maxHeight ?? defaultLot.maxHeight,
+          maxFloors: project.lot?.maxLevels ?? defaultLot.maxLevels,
+        },
+        mode: "view",
+        activeMode: "view",
         selectedWallId: null,
         selectedOpeningId: null,
         selectedFloorId: null,
@@ -950,6 +1119,16 @@ export const useAppStore = create<StoreState>((set, get) => {
           cameraStates: defaultCameraStates,
           cameraTransition: null,
           openingRailConstrainedThresholdM: defaultSettings.openingRailConstrainedThresholdM,
+          realisticShadows: true,
+          sunAzimuth: Math.PI / 4,
+          terrainViolation: false,
+          projectInitialized: true,
+          projectSettings: {
+            ...defaultEditorProjectSettings,
+            name: project.name,
+          },
+          mode: "view",
+          activeMode: "view",
           selectedWallId: null,
           selectedOpeningId: null,
           selectedFloorId: null,

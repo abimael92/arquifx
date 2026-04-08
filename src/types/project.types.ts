@@ -1,8 +1,8 @@
 export type MaterialType = "ladrillo" | "hormigon" | "madera";
-export type BuildMode = "build" | "object" | "select" | "demolish";
+export type BuildMode = "view" | "build" | "object" | "demolish";
 export type BuildSubtool = "lot" | "wall" | "room";
 export type ObjectType = "puerta" | "ventana";
-export type ViewMode = "blueprint" | "3d" | "top";
+export type ViewMode = "blueprint" | "3d" | "top" | "realistic";
 export type CameraControlMode = "orbit" | "free";
 
 export interface Vector3D {
@@ -109,6 +109,14 @@ export interface ProjectSettings {
   showGrid: boolean;
   defaultWallHeight: number;
   openingRailConstrainedThresholdM: number;
+}
+
+export interface EditorProjectSettings {
+  name: string;
+  terrainWidth: number;
+  terrainLength: number;
+  maxHeight?: number;
+  maxFloors?: number;
 }
 
 export interface ProjectStatistics {
