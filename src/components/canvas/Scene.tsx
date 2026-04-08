@@ -1,9 +1,9 @@
 "use client";
 
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BufferAttribute, BufferGeometry, MOUSE, Mesh } from "three";
+import { BufferAttribute, BufferGeometry, MOUSE, Mesh, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { useFloorDetection } from "@/hooks/useFloorDetection";
@@ -31,6 +31,39 @@ function PreviewLine({ points }: { points: [number, number, number, number, numb
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial color="#22d3ee" linewidth={2} />
+    </lineSegments>
+  );
+}
+
+function BlueprintWallLines({ walls }: { walls: WallType[] }) {
+  const points = useMemo(() => {
+    const result: number[] = [];
+    for (const wall of walls) {
+      result.push(
+        wall.startPoint.x,
+        wall.startPoint.y + 0.02,
+        wall.startPoint.z,
+        wall.endPoint.x,
+        wall.endPoint.y + 0.02,
+        wall.endPoint.z,
+      );
+    }
+    return result;
+  }, [walls]);
+
+  const geometry = useMemo(() => {
+    const nextGeometry = new BufferGeometry();
+    nextGeometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3));
+    return nextGeometry;
+  }, [points]);
+
+  useEffect(() => {
+    return () => geometry.dispose();
+  }, [geometry]);
+
+  return (
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color="#7dd3fc" linewidth={2} />
     </lineSegments>
   );
 }
@@ -135,6 +168,15 @@ export function Scene() {
   const selectedFloorId = useAppStore((state) => state.selectedFloorId);
   const selectedTool = useAppStore((state) => state.selectedTool);
   const activeMode = useAppStore((state) => state.activeMode);
+  const viewMode = useAppStore((state) => state.viewMode);
+  const cameraControlMode = useAppStore((state) => state.cameraControlMode);
+  const cameraStates = useAppStore((state) => state.cameraStates);
+  const cameraTransition = useAppStore((state) => state.cameraTransition);
+  const setCameraStateForMode = useAppStore((state) => state.setCameraStateForMode);
+  const clearCameraTransition = useAppStore((state) => state.clearCameraTransition);
+  const transitionCameraTo = useAppStore((state) => state.transitionCameraTo);
+  const showMeasurements = useAppStore((state) => state.showMeasurements);
+  const gridSpacing = useAppStore((state) => state.gridSpacing);
   const levels = useAppStore((state) => state.levels);
   const selectWall = useAppStore((state) => state.selectWall);
   const selectOpening = useAppStore((state) => state.selectOpening);
@@ -168,10 +210,12 @@ export function Scene() {
   } | null>(null);
   const [hoveredDemolish, setHoveredDemolish] = useState<{ type: "wall" | "opening"; id: string } | null>(null);
   const [isDemolishDragging, setIsDemolishDragging] = useState(false);
-  const [isCameraInteractionActive, setIsCameraInteractionActive] = useState(false);
   const erasedInDragRef = useRef<Set<string>>(new Set());
+  const keysPressedRef = useRef<Set<string>>(new Set());
 
   const orbitControlsRef = useRef<OrbitControlsImpl>(null);
+  const perspectiveCameraRef = useRef<PerspectiveCameraImpl>(null);
+  const orthoCameraRef = useRef<OrthographicCameraImpl>(null);
 
   useFloorDetection();
 
@@ -519,13 +563,157 @@ export function Scene() {
   }, [isDemolishMode]);
 
   useEffect(() => {
-    const releaseCameraInteraction = () => {
-      setIsCameraInteractionActive(false);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      keysPressedRef.current.add(event.key.toLowerCase());
     };
 
-    window.addEventListener("pointerup", releaseCameraInteraction);
-    return () => window.removeEventListener("pointerup", releaseCameraInteraction);
+    const handleKeyUp = (event: KeyboardEvent) => {
+      keysPressedRef.current.delete(event.key.toLowerCase());
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
   }, []);
+
+  useEffect(() => {
+    const controls = orbitControlsRef.current;
+    const activeCamera = viewMode === "blueprint" ? orthoCameraRef.current : perspectiveCameraRef.current;
+    const state = cameraStates[viewMode];
+    if (!controls || !activeCamera || !state) {
+      return;
+    }
+
+    activeCamera.position.set(state.position.x, state.position.y, state.position.z);
+    controls.target.set(state.target.x, state.target.y, state.target.z);
+    activeCamera.zoom = state.zoom;
+    activeCamera.updateProjectionMatrix();
+    controls.update();
+  }, [cameraStates, viewMode]);
+
+  useEffect(() => {
+    const focus = () => {
+      const selectedOpening = visibleOpenings.find((item) => item.id === selectedOpeningId);
+      if (selectedOpening) {
+        const parentWall = visibleWalls.find((item) => item.id === selectedOpening.wallId);
+        if (parentWall) {
+          const projection = projectOpeningOnWall(parentWall, { x: parentWall.startPoint.x, z: parentWall.startPoint.z }, selectedOpening.width);
+          transitionCameraTo(viewMode, {
+            target: { x: projection.centerX, y: parentWall.startPoint.y + selectedOpening.height * 0.5, z: projection.centerZ },
+          });
+        }
+        return;
+      }
+
+      const wall = visibleWalls.find((item) => item.id === selectedWallId);
+      if (wall) {
+        transitionCameraTo(viewMode, {
+          target: {
+            x: (wall.startPoint.x + wall.endPoint.x) / 2,
+            y: (wall.startPoint.y + wall.endPoint.y) / 2,
+            z: (wall.startPoint.z + wall.endPoint.z) / 2,
+          },
+        });
+      }
+    };
+
+    focus();
+  }, [selectedOpeningId, selectedWallId]);
+
+  useFrame((_, delta) => {
+    const controls = orbitControlsRef.current;
+    const activeCamera = viewMode === "blueprint" ? orthoCameraRef.current : perspectiveCameraRef.current;
+
+    if (!controls || !activeCamera) {
+      return;
+    }
+
+    if (cameraTransition && cameraTransition.active && cameraTransition.mode === viewMode) {
+      const factor = Math.min(1, delta * 6);
+      const target = cameraTransition.target;
+
+      activeCamera.position.lerp(new Vector3(target.position.x, target.position.y, target.position.z), factor);
+      controls.target.lerp(new Vector3(target.target.x, target.target.y, target.target.z), factor);
+      activeCamera.zoom += (target.zoom - activeCamera.zoom) * factor;
+      activeCamera.updateProjectionMatrix();
+
+      const reached =
+        activeCamera.position.distanceTo(new Vector3(target.position.x, target.position.y, target.position.z)) < 0.04 &&
+        controls.target.distanceTo(new Vector3(target.target.x, target.target.y, target.target.z)) < 0.04 &&
+        Math.abs(activeCamera.zoom - target.zoom) < 0.02;
+
+      if (reached) {
+        clearCameraTransition();
+      }
+    }
+
+    if (cameraControlMode === "free" && viewMode !== "blueprint") {
+      const speed = keysPressedRef.current.has("shift") ? 10 : 4;
+      const forward = new Vector3().subVectors(controls.target, activeCamera.position).setY(0).normalize();
+      const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
+      const moveStep = speed * delta;
+
+      if (keysPressedRef.current.has("w")) {
+        activeCamera.position.addScaledVector(forward, moveStep);
+        controls.target.addScaledVector(forward, moveStep);
+      }
+      if (keysPressedRef.current.has("s")) {
+        activeCamera.position.addScaledVector(forward, -moveStep);
+        controls.target.addScaledVector(forward, -moveStep);
+      }
+      if (keysPressedRef.current.has("a")) {
+        activeCamera.position.addScaledVector(right, -moveStep);
+        controls.target.addScaledVector(right, -moveStep);
+      }
+      if (keysPressedRef.current.has("d")) {
+        activeCamera.position.addScaledVector(right, moveStep);
+        controls.target.addScaledVector(right, moveStep);
+      }
+      if (keysPressedRef.current.has("q") || keysPressedRef.current.has("e")) {
+        const dir = keysPressedRef.current.has("q") ? -1 : 1;
+        const rel = new Vector3().subVectors(activeCamera.position, controls.target);
+        rel.applyAxisAngle(new Vector3(0, 1, 0), dir * delta * 1.4);
+        activeCamera.position.copy(new Vector3().addVectors(controls.target, rel));
+      }
+    }
+
+    if (activeCamera.position.y < 0.45) {
+      activeCamera.position.y = 0.45;
+    }
+    if (controls.target.y < 0) {
+      controls.target.y = 0;
+    }
+
+    controls.update();
+    setCameraPosition({
+      x: activeCamera.position.x,
+      y: activeCamera.position.y,
+      z: activeCamera.position.z,
+    });
+    setCameraStateForMode(viewMode, {
+      position: {
+        x: activeCamera.position.x,
+        y: activeCamera.position.y,
+        z: activeCamera.position.z,
+      },
+      target: {
+        x: controls.target.x,
+        y: controls.target.y,
+        z: controls.target.z,
+      },
+      zoom: activeCamera.zoom,
+      rotation: {
+        x: activeCamera.rotation.x,
+        y: activeCamera.rotation.y,
+        z: activeCamera.rotation.z,
+      },
+    });
+  });
+
+  const majorGridDivisions = useMemo(() => Math.max(4, Math.round(120 / gridSpacing)), [gridSpacing]);
 
   return (
     <div
@@ -537,9 +725,6 @@ export function Scene() {
       <Canvas
         shadows
         camera={{ position: [8, 6, 8], fov: 50 }}
-        onPointerDown={(event) => {
-          setIsCameraInteractionActive(event.button === 2);
-        }}
         onPointerMissed={() => {
           onScenePointerMissed();
           setOpeningPreview(null);
@@ -550,12 +735,15 @@ export function Scene() {
       >
         <color attach="background" args={["#0b1220"]} />
 
-        <ambientLight intensity={0.45} />
-        <directionalLight castShadow intensity={1.1} position={[8, 14, 10]} />
+        <PerspectiveCamera ref={perspectiveCameraRef} makeDefault={viewMode !== "blueprint"} fov={50} />
+        <OrthographicCamera ref={orthoCameraRef} makeDefault={viewMode === "blueprint"} near={0.1} far={2000} zoom={36} />
+
+        <ambientLight intensity={viewMode === "blueprint" ? 0.2 : 0.45} />
+        {viewMode !== "blueprint" ? <directionalLight castShadow intensity={1.1} position={[8, 14, 10]} /> : null}
 
         {showGrid ? (
           <>
-            <gridHelper args={[120, 120, "#475569", "#1e293b"]} position={[0, 0, 0]} />
+            <gridHelper args={[120, majorGridDivisions, "#475569", "#1e293b"]} position={[0, 0, 0]} />
             <gridHelper args={[120, 480, "#334155", "#0f172a"]} position={[0, 0.001, 0]} />
           </>
         ) : null}
@@ -608,7 +796,8 @@ export function Scene() {
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
 
-        {visibleWalls.map((wall) => (
+        {viewMode !== "blueprint"
+          ? visibleWalls.map((wall) => (
           <Wall
             key={wall.id}
             wall={wall}
@@ -628,18 +817,24 @@ export function Scene() {
             }}
             isHighlighted={isDemolishMode && hoveredDemolish?.type === "wall" && hoveredDemolish.id === wall.id}
           />
-        ))}
+            ))
+          : null}
 
-        {visibleFloors.map((floor) => (
+        {viewMode === "blueprint" ? <BlueprintWallLines walls={visibleWalls} /> : null}
+
+        {viewMode !== "blueprint"
+          ? visibleFloors.map((floor) => (
           <Floor
             key={floor.id}
             floor={floor}
             isSelected={floor.id === selectedFloorId}
             onSelect={(floorId) => selectFloor(floorId)}
           />
-        ))}
+            ))
+          : null}
 
-        {visibleOpenings.map((opening) => {
+        {viewMode !== "blueprint"
+          ? visibleOpenings.map((opening) => {
           const wall = visibleWalls.find((item) => item.id === opening.wallId);
           if (!wall) {
             return null;
@@ -717,9 +912,10 @@ export function Scene() {
               }
             />
           );
-        })}
+            })
+          : null}
 
-        {openingPreview ? (
+        {openingPreview && viewMode !== "blueprint" ? (
           <mesh position={openingPreview.center} rotation={[0, openingPreview.rotationY, 0]}>
             <boxGeometry args={[openingPreview.width, openingPreview.height, openingPreview.thickness * 1.08]} />
             <meshStandardMaterial
@@ -730,7 +926,7 @@ export function Scene() {
           </mesh>
         ) : null}
 
-        {openingRail && (isOpeningTool || Boolean(openingDragState)) ? (
+        {openingRail && (isOpeningTool || Boolean(openingDragState)) && viewMode !== "blueprint" ? (
           <OpeningRail
             points={openingRail.points}
             start={openingRail.start}
@@ -757,17 +953,21 @@ export function Scene() {
         <OrbitControls
           ref={orbitControlsRef}
           makeDefault
-          enabled={isCameraInteractionActive}
-          enableZoom={false}
+          enabled={cameraControlMode === "orbit"}
+          enableZoom
+          enablePan
           enableDamping
           dampingFactor={0.08}
+          minDistance={2}
+          maxDistance={120}
           minPolarAngle={0.08}
           maxPolarAngle={Math.PI / 2 - 0.08}
-          mouseButtons={{ LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }}
+          mouseButtons={{ LEFT: undefined, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.ROTATE }}
           onChange={() => {
             const controls = orbitControlsRef.current;
-            const position = controls?.object.position;
-            if (!position || !controls) {
+            const camera = viewMode === "blueprint" ? orthoCameraRef.current : perspectiveCameraRef.current;
+            const position = camera?.position;
+            if (!position || !controls || !camera) {
               return;
             }
 
@@ -784,17 +984,31 @@ export function Scene() {
               y: position.y,
               z: position.z,
             });
+
+            setCameraStateForMode(viewMode, {
+              position: {
+                x: position.x,
+                y: position.y,
+                z: position.z,
+              },
+              target: {
+                x: controls.target.x,
+                y: controls.target.y,
+                z: controls.target.z,
+              },
+              zoom: camera.zoom,
+            });
           }}
         />
       </Canvas>
 
-      {activeMetricsLabel ? (
+      {activeMetricsLabel && showMeasurements ? (
         <div className="pointer-events-none absolute bottom-5 left-5 rounded-lg border border-cyan-500/30 bg-slate-950/80 px-3 py-2 text-xs text-cyan-100">
           {activeMetricsLabel}
         </div>
       ) : null}
 
-      {openingRail?.isConstrained && (isOpeningTool || Boolean(openingDragState)) ? (
+      {showMeasurements && openingRail?.isConstrained && (isOpeningTool || Boolean(openingDragState)) ? (
         <div className="pointer-events-none absolute bottom-16 left-5 rounded-lg border border-rose-400/40 bg-rose-950/75 px-3 py-2 text-xs text-rose-100">
           Abertura al límite del muro
         </div>

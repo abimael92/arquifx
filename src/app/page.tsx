@@ -6,9 +6,12 @@ import { Scene } from "@/components/canvas/Scene";
 import { Button } from "@/components/atoms/Button";
 import { MeasurementCard } from "@/components/molecules/MeasurementCard";
 import { BottomStatusBar } from "@/components/organisms/BottomStatusBar";
+import { MiniMap } from "@/components/organisms/MiniMap";
+import { NavigationToolbar } from "@/components/organisms/NavigationToolbar";
 import { PropertyInspector } from "@/components/organisms/PropertyInspector";
 import { ProjectStatsCard } from "@/components/organisms/ProjectStatsCard";
 import { Sidebar } from "@/components/organisms/Sidebar";
+import { ViewSwitcher } from "@/components/organisms/ViewSwitcher";
 import { useProjectAutoSave } from "@/hooks/useProjectAutoSave";
 import { calculateProjectCost, calculateTotalFloorArea } from "@/lib/math";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -129,7 +132,11 @@ export default function Home() {
         <Sidebar selectedTool={selectedTool} onSelectTool={setSelectedTool} />
 
         <section className="relative flex-1 border-r border-slate-800/90">
-          <div className="pointer-events-none absolute left-5 top-5 z-10 rounded-2xl border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-xs text-slate-200 shadow-xl backdrop-blur-sm">
+          <ViewSwitcher />
+          <NavigationToolbar />
+          <MiniMap />
+
+          <div className="pointer-events-none absolute right-5 top-5 z-10 rounded-2xl border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-xs text-slate-200 shadow-xl backdrop-blur-sm">
             <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-200/80">{es.app.sceneView}</p>
             <p className="mt-1 text-sm font-semibold text-slate-100">
               {es.app.activeTool}: <span className="text-cyan-200">{es.tools[selectedTool]}</span>

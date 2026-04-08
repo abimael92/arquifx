@@ -2,11 +2,20 @@ export type MaterialType = "ladrillo" | "hormigon" | "madera";
 export type BuildMode = "build" | "object" | "select" | "demolish";
 export type BuildSubtool = "lot" | "wall" | "room";
 export type ObjectType = "puerta" | "ventana";
+export type ViewMode = "blueprint" | "3d" | "top";
+export type CameraControlMode = "orbit" | "free";
 
 export interface Vector3D {
   x: number;
   y: number;
   z: number;
+}
+
+export interface CameraState {
+  position: Vector3D;
+  target: Vector3D;
+  zoom: number;
+  rotation: Vector3D;
 }
 
 export interface Wall {

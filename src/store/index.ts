@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 import {
   BuildMode,
   BuildSubtool,
+  CameraControlMode,
+  CameraState,
   DragState,
   Floor,
   Level,
@@ -13,6 +15,7 @@ import {
   Project,
   ProjectSettings,
   Room,
+  ViewMode,
   Vector3D,
   Wall,
 } from "@/types/project.types";
@@ -61,12 +64,29 @@ interface UiSlice {
   selectedTool: SelectedTool;
   isDrawingMode: boolean;
   showGrid: boolean;
+  showMeasurements: boolean;
+  gridSpacing: number;
   cameraPosition: Vector3D;
+  viewMode: ViewMode;
+  cameraControlMode: CameraControlMode;
+  cameraStates: Record<ViewMode, CameraState>;
+  cameraTransition: {
+    active: boolean;
+    mode: ViewMode;
+    target: CameraState;
+  } | null;
   openingRailConstrainedThresholdM: number;
   setSelectedTool: (tool: SelectedTool) => void;
   setIsDrawingMode: (enabled: boolean) => void;
   setShowGrid: (visible: boolean) => void;
+  setShowMeasurements: (visible: boolean) => void;
+  setGridSpacing: (spacing: number) => void;
   setCameraPosition: (position: Vector3D) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setCameraControlMode: (mode: CameraControlMode) => void;
+  setCameraStateForMode: (mode: ViewMode, updates: Partial<CameraState>) => void;
+  transitionCameraTo: (mode: ViewMode, target: Partial<CameraState>) => void;
+  clearCameraTransition: () => void;
   setOpeningRailConstrainedThresholdM: (value: number) => void;
 }
 
@@ -121,7 +141,17 @@ interface UndoSnapshot {
   selectedTool: SelectedTool;
   isDrawingMode: boolean;
   showGrid: boolean;
+  showMeasurements: boolean;
+  gridSpacing: number;
   cameraPosition: Vector3D;
+  viewMode: ViewMode;
+  cameraControlMode: CameraControlMode;
+  cameraStates: Record<ViewMode, CameraState>;
+  cameraTransition: {
+    active: boolean;
+    mode: ViewMode;
+    target: CameraState;
+  } | null;
   openingRailConstrainedThresholdM: number;
   activeMode: BuildMode;
   activeBuildSubtool: BuildSubtool;
@@ -163,6 +193,26 @@ const defaultSettings: ProjectSettings = {
 };
 
 const defaultCameraPosition: Vector3D = { x: 8, y: 6, z: 8 };
+const defaultCameraStates: Record<ViewMode, CameraState> = {
+  "3d": {
+    position: { x: 8, y: 6, z: 8 },
+    target: { x: 0, y: 0, z: 0 },
+    zoom: 1,
+    rotation: { x: 0, y: 0, z: 0 },
+  },
+  top: {
+    position: { x: 0, y: 14, z: 0.1 },
+    target: { x: 0, y: 0, z: 0 },
+    zoom: 1,
+    rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+  },
+  blueprint: {
+    position: { x: 0, y: 20, z: 0.1 },
+    target: { x: 0, y: 0, z: 0 },
+    zoom: 36,
+    rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+  },
+};
 const defaultLevelId = "level-0";
 const defaultLevels: Level[] = [
   {
@@ -241,7 +291,13 @@ const makeSnapshot = (state: StoreState): UndoSnapshot => ({
   selectedTool: state.selectedTool,
   isDrawingMode: state.isDrawingMode,
   showGrid: state.showGrid,
+  showMeasurements: state.showMeasurements,
+  gridSpacing: state.gridSpacing,
   cameraPosition: state.cameraPosition,
+  viewMode: state.viewMode,
+  cameraControlMode: state.cameraControlMode,
+  cameraStates: state.cameraStates,
+  cameraTransition: state.cameraTransition,
   openingRailConstrainedThresholdM: state.openingRailConstrainedThresholdM,
   activeMode: state.activeMode,
   activeBuildSubtool: state.activeBuildSubtool,
@@ -282,7 +338,13 @@ export const useAppStore = create<StoreState>((set, get) => {
     selectedTool: "Seleccionar",
     isDrawingMode: false,
     showGrid: true,
+    showMeasurements: true,
+    gridSpacing: 1,
     cameraPosition: defaultCameraPosition,
+    viewMode: "3d",
+    cameraControlMode: "orbit",
+    cameraStates: defaultCameraStates,
+    cameraTransition: null,
     openingRailConstrainedThresholdM: defaultSettings.openingRailConstrainedThresholdM,
     activeMode: "select",
     activeBuildSubtool: "wall",
@@ -494,8 +556,61 @@ export const useAppStore = create<StoreState>((set, get) => {
       set({ showGrid: visible });
     },
 
+    setShowMeasurements: (visible) => {
+      set({ showMeasurements: visible });
+    },
+
+    setGridSpacing: (spacing) => {
+      set({ gridSpacing: Math.max(0.1, Math.min(5, spacing)) });
+    },
+
     setCameraPosition: (position) => {
       set({ cameraPosition: position });
+    },
+
+    setViewMode: (mode) => {
+      set({ viewMode: mode });
+    },
+
+    setCameraControlMode: (mode) => {
+      set({ cameraControlMode: mode });
+    },
+
+    setCameraStateForMode: (mode, updates) => {
+      set((state) => ({
+        cameraStates: {
+          ...state.cameraStates,
+          [mode]: {
+            ...state.cameraStates[mode],
+            ...updates,
+            position: updates.position ?? state.cameraStates[mode].position,
+            target: updates.target ?? state.cameraStates[mode].target,
+            rotation: updates.rotation ?? state.cameraStates[mode].rotation,
+            zoom: updates.zoom ?? state.cameraStates[mode].zoom,
+          },
+        },
+      }));
+    },
+
+    transitionCameraTo: (mode, target) => {
+      set((state) => ({
+        cameraTransition: {
+          active: true,
+          mode,
+          target: {
+            ...state.cameraStates[mode],
+            ...target,
+            position: target.position ?? state.cameraStates[mode].position,
+            target: target.target ?? state.cameraStates[mode].target,
+            rotation: target.rotation ?? state.cameraStates[mode].rotation,
+            zoom: target.zoom ?? state.cameraStates[mode].zoom,
+          },
+        },
+      }));
+    },
+
+    clearCameraTransition: () => {
+      set({ cameraTransition: null });
     },
 
     setOpeningRailConstrainedThresholdM: (value) => {
@@ -792,6 +907,12 @@ export const useAppStore = create<StoreState>((set, get) => {
         lot: project.lot ?? defaultLot,
         activeLevelId: project.levels?.[0]?.id ?? defaultLevelId,
         showGrid: resolvedSettings.showGrid,
+        showMeasurements: true,
+        gridSpacing: 1,
+        viewMode: "3d",
+        cameraControlMode: "orbit",
+        cameraStates: defaultCameraStates,
+        cameraTransition: null,
         openingRailConstrainedThresholdM: resolvedSettings.openingRailConstrainedThresholdM,
         selectedWallId: null,
         selectedOpeningId: null,
@@ -822,6 +943,12 @@ export const useAppStore = create<StoreState>((set, get) => {
           levels: defaultLevels,
           activeLevelId: defaultLevelId,
           lot: defaultLot,
+          showMeasurements: true,
+          gridSpacing: 1,
+          viewMode: "3d",
+          cameraControlMode: "orbit",
+          cameraStates: defaultCameraStates,
+          cameraTransition: null,
           openingRailConstrainedThresholdM: defaultSettings.openingRailConstrainedThresholdM,
           selectedWallId: null,
           selectedOpeningId: null,
