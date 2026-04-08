@@ -146,6 +146,9 @@ export function Scene() {
   const showGrid = useAppStore((state) => state.showGrid);
   const updateWall = useAppStore((state) => state.updateWall);
   const setCameraPosition = useAppStore((state) => state.setCameraPosition);
+  const openingRailConstrainedThresholdM = useAppStore(
+    (state) => state.currentProject?.settings.openingRailConstrainedThresholdM ?? 0.12,
+  );
   const [openingPreview, setOpeningPreview] = useState<{
     wallId: string;
     type: "puerta" | "ventana";
@@ -346,7 +349,7 @@ export function Scene() {
         (wall.endPoint.z - wall.startPoint.z) * (wall.endPoint.z - wall.startPoint.z),
     );
     const remainingSpan = wallLength - openingPreview.width;
-    const isConstrained = remainingSpan <= 0.12;
+    const isConstrained = remainingSpan <= openingRailConstrainedThresholdM;
 
     return {
       points: [start[0], start[1], start[2], end[0], end[1], end[2]],
@@ -355,7 +358,7 @@ export function Scene() {
       marker,
       isConstrained,
     };
-  }, [openingPreview, visibleWalls]);
+  }, [openingPreview, openingRailConstrainedThresholdM, visibleWalls]);
 
   const openingDefaults = useMemo(() => {
     if (selectedTool === "Puertas") {
@@ -754,6 +757,12 @@ export function Scene() {
       {activeMetricsLabel ? (
         <div className="pointer-events-none absolute bottom-5 left-5 rounded-lg border border-cyan-500/30 bg-slate-950/80 px-3 py-2 text-xs text-cyan-100">
           {activeMetricsLabel}
+        </div>
+      ) : null}
+
+      {openingRail?.isConstrained && (isOpeningTool || Boolean(openingDragState)) ? (
+        <div className="pointer-events-none absolute bottom-16 left-5 rounded-lg border border-rose-400/40 bg-rose-950/75 px-3 py-2 text-xs text-rose-100">
+          Abertura al límite del muro
         </div>
       ) : null}
     </div>

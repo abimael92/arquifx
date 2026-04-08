@@ -99,6 +99,7 @@ export interface ProjectSettings {
   angleSnap: number;
   showGrid: boolean;
   defaultWallHeight: number;
+  openingRailConstrainedThresholdM: number;
 }
 
 export interface ProjectStatistics {

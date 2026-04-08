@@ -58,6 +58,7 @@ export default function Home() {
         angleSnap: 15,
         showGrid: true,
         defaultWallHeight: 2.8,
+        openingRailConstrainedThresholdM: 0.12,
       },
     statistics: {
       totalWalls: walls.length,

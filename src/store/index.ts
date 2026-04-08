@@ -156,6 +156,7 @@ const defaultSettings: ProjectSettings = {
   angleSnap: 15,
   showGrid: true,
   defaultWallHeight: 2.8,
+  openingRailConstrainedThresholdM: 0.12,
 };
 
 const defaultCameraPosition: Vector3D = { x: 8, y: 6, z: 8 };
@@ -723,7 +724,11 @@ export const useAppStore = create<StoreState>((set, get) => {
 
       const projectId = state.currentProject?.id ?? uuidv4();
       const projectName = state.currentProject?.name ?? "Proyecto sin nombre";
-      const projectSettings = state.currentProject?.settings ?? { ...defaultSettings, showGrid: state.showGrid };
+      const projectSettings = {
+        ...defaultSettings,
+        ...state.currentProject?.settings,
+        showGrid: state.showGrid,
+      };
 
       const project = buildProject(
         projectId,
@@ -742,8 +747,16 @@ export const useAppStore = create<StoreState>((set, get) => {
     },
 
     loadProject: (project) => {
+      const resolvedSettings = {
+        ...defaultSettings,
+        ...project.settings,
+      };
+
       applyWithHistory(() => ({
-        currentProject: project,
+        currentProject: {
+          ...project,
+          settings: resolvedSettings,
+        },
         walls: project.walls,
         floors: project.floors,
         openings: project.openings,
@@ -751,7 +764,7 @@ export const useAppStore = create<StoreState>((set, get) => {
         levels: project.levels?.length ? project.levels : defaultLevels,
         lot: project.lot ?? defaultLot,
         activeLevelId: project.levels?.[0]?.id ?? defaultLevelId,
-        showGrid: project.settings.showGrid,
+        showGrid: resolvedSettings.showGrid,
         selectedWallId: null,
         selectedOpeningId: null,
         selectedFloorId: null,
