@@ -73,6 +73,7 @@ export function Scene() {
   const addOpening = useAppStore((state) => state.addOpening);
   const deleteWall = useAppStore((state) => state.deleteWall);
   const deleteOpening = useAppStore((state) => state.deleteOpening);
+  const updateOpening = useAppStore((state) => state.updateOpening);
   const showGrid = useAppStore((state) => state.showGrid);
   const updateWall = useAppStore((state) => state.updateWall);
   const setCameraPosition = useAppStore((state) => state.setCameraPosition);
@@ -86,6 +87,14 @@ export function Scene() {
     center: [number, number, number];
     rotationY: number;
     thickness: number;
+  } | null>(null);
+  const [openingDragState, setOpeningDragState] = useState<{
+    openingId: string;
+    wallId: string;
+    width: number;
+    height: number;
+    sillHeight: number;
+    type: "puerta" | "ventana" | "hueco";
   } | null>(null);
   const [hoveredDemolish, setHoveredDemolish] = useState<{ type: "wall" | "opening"; id: string } | null>(null);
   const [isDemolishDragging, setIsDemolishDragging] = useState(false);
@@ -111,6 +120,7 @@ export function Scene() {
     onCanvasPointerUp: onRoomPointerUp,
   } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
+  const isObjectMode = activeMode === "object" || isOpeningTool;
   const isDemolishMode = activeMode === "demolish" || selectedTool === "Eliminar";
 
   const visibleLevelIds = useMemo(
@@ -283,6 +293,27 @@ export function Scene() {
     eraseEntity(type, id);
   };
 
+  const projectOpeningOnWall = (wall: WallType, worldPoint: { x: number; z: number }, openingWidth: number) => {
+    const { length, dirX, dirZ, rotationY } = getWallMetrics(wall);
+    const relX = worldPoint.x - wall.startPoint.x;
+    const relZ = worldPoint.z - wall.startPoint.z;
+    const projectedDistance = relX * dirX + relZ * dirZ;
+    const clampedDistance = Math.max(
+      openingWidth / 2,
+      Math.min(projectedDistance, Math.max(openingWidth / 2, length - openingWidth / 2)),
+    );
+
+    const centerX = wall.startPoint.x + dirX * clampedDistance;
+    const centerZ = wall.startPoint.z + dirZ * clampedDistance;
+
+    return {
+      positionFromStart: clampedDistance,
+      centerX,
+      centerZ,
+      rotationY,
+    };
+  };
+
   const handleWallPointerMove = (wall: WallType, event: ThreeEvent<PointerEvent>) => {
     if (isDemolishMode) {
       setHoveredDemolish({ type: "wall", id: wall.id });
@@ -296,28 +327,18 @@ export function Scene() {
       return;
     }
 
-    const { length, dirX, dirZ, rotationY } = getWallMetrics(wall);
-    const relX = event.point.x - wall.startPoint.x;
-    const relZ = event.point.z - wall.startPoint.z;
-    const projectedDistance = relX * dirX + relZ * dirZ;
-    const clampedDistance = Math.max(
-      openingDefaults.width / 2,
-      Math.min(projectedDistance, Math.max(openingDefaults.width / 2, length - openingDefaults.width / 2)),
-    );
-
-    const centerX = wall.startPoint.x + dirX * clampedDistance;
-    const centerZ = wall.startPoint.z + dirZ * clampedDistance;
+    const projection = projectOpeningOnWall(wall, event.point, openingDefaults.width);
     const centerY = wall.startPoint.y + openingDefaults.sillHeight + openingDefaults.height / 2;
 
     setOpeningPreview({
       wallId: wall.id,
       type: openingDefaults.type,
-      positionFromStart: clampedDistance,
+      positionFromStart: projection.positionFromStart,
       width: openingDefaults.width,
       height: openingDefaults.height,
       sillHeight: openingDefaults.sillHeight,
-      center: [centerX, centerY, centerZ],
-      rotationY,
+      center: [projection.centerX, centerY, projection.centerZ],
+      rotationY: projection.rotationY,
       thickness: wall.thickness,
     });
   };
@@ -347,6 +368,31 @@ export function Scene() {
       setOpeningPreview(null);
     }
   }, [isOpeningTool]);
+
+  useEffect(() => {
+    if (!openingDragState) {
+      return;
+    }
+
+    const handlePointerUp = () => {
+      if (!openingPreview || openingPreview.wallId !== openingDragState.wallId) {
+        setOpeningDragState(null);
+        return;
+      }
+
+      updateOpening(openingDragState.openingId, {
+        positionFromStart: openingPreview.positionFromStart,
+      });
+
+      setOpeningDragState(null);
+      if (!isOpeningTool) {
+        setOpeningPreview(null);
+      }
+    };
+
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => window.removeEventListener("pointerup", handlePointerUp);
+  }, [isOpeningTool, openingDragState, openingPreview, updateOpening]);
 
   useEffect(() => {
     if (!isDemolishMode) {
@@ -403,6 +449,25 @@ export function Scene() {
             onRoomPointerDown(event);
           }}
           onPointerMove={(event) => {
+            if (openingDragState) {
+              const wall = visibleWalls.find((item) => item.id === openingDragState.wallId);
+              if (wall) {
+                const projection = projectOpeningOnWall(wall, event.point, openingDragState.width);
+                const centerY = wall.startPoint.y + openingDragState.sillHeight + openingDragState.height / 2;
+                setOpeningPreview({
+                  wallId: wall.id,
+                  type: openingDragState.type === "hueco" ? "ventana" : openingDragState.type,
+                  positionFromStart: projection.positionFromStart,
+                  width: openingDragState.width,
+                  height: openingDragState.height,
+                  sillHeight: openingDragState.sillHeight,
+                  center: [projection.centerX, centerY, projection.centerZ],
+                  rotationY: projection.rotationY,
+                  thickness: wall.thickness,
+                });
+              }
+            }
+
             onWallPointerMove(event);
             onRoomPointerMove(event);
           }}
@@ -465,6 +530,39 @@ export function Scene() {
                 }
 
                 selectOpening(openingId);
+              }}
+              onOpeningPointerDown={(openingItem, event) => {
+                if (!isObjectMode || isDemolishMode) {
+                  return;
+                }
+
+                const wallForOpening = visibleWalls.find((item) => item.id === openingItem.wallId);
+                if (!wallForOpening) {
+                  return;
+                }
+
+                setOpeningDragState({
+                  openingId: openingItem.id,
+                  wallId: openingItem.wallId,
+                  width: openingItem.width,
+                  height: openingItem.height,
+                  sillHeight: openingItem.sillHeight,
+                  type: openingItem.type,
+                });
+
+                const projection = projectOpeningOnWall(wallForOpening, event.point, openingItem.width);
+                const centerY = wallForOpening.startPoint.y + openingItem.sillHeight + openingItem.height / 2;
+                setOpeningPreview({
+                  wallId: wallForOpening.id,
+                  type: openingItem.type === "hueco" ? "ventana" : openingItem.type,
+                  positionFromStart: projection.positionFromStart,
+                  width: openingItem.width,
+                  height: openingItem.height,
+                  sillHeight: openingItem.sillHeight,
+                  center: [projection.centerX, centerY, projection.centerZ],
+                  rotationY: projection.rotationY,
+                  thickness: wallForOpening.thickness,
+                });
               }}
               onOpeningPointerMove={(openingItem, event) => {
                 if (!isDemolishMode) {

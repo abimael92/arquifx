@@ -12,6 +12,8 @@ interface OpeningProps {
   isSelected: boolean;
   isHighlighted?: boolean;
   onSelect: (openingId: string) => void;
+  onOpeningPointerDown?: (opening: OpeningType, event: ThreeEvent<PointerEvent>) => void;
+  onOpeningPointerUp?: (opening: OpeningType, event: ThreeEvent<PointerEvent>) => void;
   onOpeningPointerMove?: (opening: OpeningType, event: ThreeEvent<PointerEvent>) => void;
   onOpeningPointerEnter?: (opening: OpeningType) => void;
   onOpeningPointerLeave?: (opening: OpeningType) => void;
@@ -23,6 +25,8 @@ export function Opening({
   isSelected,
   isHighlighted = false,
   onSelect,
+  onOpeningPointerDown,
+  onOpeningPointerUp,
   onOpeningPointerMove,
   onOpeningPointerEnter,
   onOpeningPointerLeave,
@@ -51,6 +55,13 @@ export function Opening({
     <mesh
       position={position}
       rotation={[0, rotationY, 0]}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        onOpeningPointerDown?.(opening, event);
+      }}
+      onPointerUp={(event) => {
+        onOpeningPointerUp?.(opening, event);
+      }}
       onPointerMove={(event) => {
         onOpeningPointerMove?.(opening, event);
       }}
