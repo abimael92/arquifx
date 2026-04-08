@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+
+import { GlobalShortcuts } from "@/components/layout/GlobalShortcuts";
+
 import "./globals.css";
 
 const inter = Inter({
@@ -19,7 +22,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${inter.variable} h-full`}>
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        <GlobalShortcuts />
+        {children}
+      </body>
     </html>
   );
 }

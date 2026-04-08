@@ -21,7 +21,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/");
+      router.replace("/dashboard");
     }
   }, [loading, router, user]);
 
@@ -31,7 +31,7 @@ export default function RegisterPage() {
 
     try {
       await signUp(email, password, fullName);
-      router.replace("/");
+      router.replace("/dashboard");
     } catch (err) {
       const message = err instanceof Error ? err.message : es.auth.errorDefault;
       setError(message);
