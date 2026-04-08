@@ -1,0 +1,97 @@
+{
+  "app": {
+    "name": "ArquiFX",
+    "subtitle": "Diseño arquitectónico 3D",
+    "sceneView": "Vista de escena",
+    "activeTool": "Herramienta activa"
+  },
+  "tools": {
+    "Muros": "Muros",
+    "Puertas": "Puertas",
+    "Ventanas": "Ventanas",
+    "Suelos": "Suelos",
+    "Medir": "Medir",
+    "Seleccionar": "Seleccionar",
+    "Eliminar": "Eliminar"
+  },
+  "sidebar": {
+    "title": "Herramientas"
+  },
+  "atoms": {
+    "input": {
+      "required": "Este campo es obligatorio"
+    }
+  },
+  "measurement": {
+    "title": "Resumen de mediciones",
+    "totalArea": "Área total",
+    "perimeter": "Perímetro",
+    "estimatedCost": "Costo estimado"
+  },
+  "statistics": {
+    "title": "Tarjeta de Estadísticas del Proyecto",
+    "builtArea": "Área construida",
+    "totalPerimeter": "Perímetro total",
+    "wallsCount": "Cantidad de muros",
+    "doorsCount": "Cantidad de puertas",
+    "windowsCount": "Cantidad de ventanas",
+    "estimatedCost": "Costo estimado"
+  },
+  "inspector": {
+    "title": "Inspector de propiedades",
+    "noSelection": "Selecciona un elemento para editar sus propiedades",
+    "wall": {
+      "title": "Propiedades de la pared",
+      "height": "Altura",
+      "thickness": "Grosor",
+      "material": "Material",
+      "insulation": "Aislamiento"
+    },
+    "opening": {
+      "title": "Propiedades de la abertura",
+      "width": "Ancho",
+      "height": "Alto",
+      "material": "Material"
+    },
+    "materialOptions": {
+      "ladrillo": "Ladrillo",
+      "hormigon": "Hormigón",
+      "madera": "Madera"
+    }
+  },
+  "statusBar": {
+    "coordinates": "Coordenadas",
+    "totalArea": "Área total",
+    "projectStatus": "Estado del proyecto",
+    "saved": "Guardado",
+    "notSaved": "No guardado"
+  },
+  "toast": {
+    "saved": "Guardado"
+  },
+  "auth": {
+    "loginTitle": "Iniciar sesión",
+    "registerTitle": "Crear cuenta",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "fullName": "Nombre completo",
+    "login": "Entrar",
+    "register": "Registrarse",
+    "google": "Continuar con Google",
+    "goToRegister": "¿No tienes cuenta? Regístrate",
+    "goToLogin": "¿Ya tienes cuenta? Inicia sesión",
+    "loading": "Cargando sesión...",
+    "errorDefault": "No se pudo completar la operación"
+  },
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "export": "Exportar"
+  },
+  "units": {
+    "meters": "m",
+    "squareMeters": "m²",
+    "euros": "€"
+  }
+}
