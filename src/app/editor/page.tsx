@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Download, Eye, Wrench } from "lucide-react";
 
 import { Scene } from "@/components/canvas/Scene";
 import { Button } from "@/components/atoms/Button";
@@ -153,7 +154,10 @@ export default function EditorPage() {
           <MiniMap />
 
           <div className="pointer-events-none absolute right-5 top-5 z-10 rounded-2xl border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-xs text-slate-200 shadow-xl backdrop-blur-sm">
-            <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-200/80">{es.app.sceneView}</p>
+            <p className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-cyan-200/80">
+              <Eye className="h-3.5 w-3.5" />
+              {es.app.sceneView}
+            </p>
             <p className="mt-1 text-sm font-semibold text-slate-100">
               {es.app.activeTool}: <span className="text-cyan-200">{es.tools[selectedTool]}</span>
             </p>
@@ -164,8 +168,12 @@ export default function EditorPage() {
         {!isPlayMode ? (
           <aside className="w-80 shrink-0 border-l border-slate-800/90 bg-[linear-gradient(180deg,#111d33_0%,#0c1525_35%,#09101d_100%)] p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-300">{es.inspector.title}</h2>
+            <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-300">
+              <Wrench className="h-4 w-4" />
+              {es.inspector.title}
+            </h2>
             <Button variant="secondary" onClick={handleExportProject}>
+              <Download className="mr-1 h-4 w-4" />
               {es.buttons.export}
             </Button>
           </div>
