@@ -7,9 +7,9 @@ import { Box3, BufferAttribute, BufferGeometry, Group, MOUSE, Mesh, MeshStandard
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
-import { useFloorDetection } from "@/hooks/useFloorDetection";
-import { useRoomDrawing } from "@/hooks/useRoomDrawing";
-import { useWallDrawing } from "@/hooks/useWallDrawing";
+import { useFloorDetection } from "@/features/editor/hooks/useFloorDetection";
+import { useRoomDrawing } from "@/features/editor/hooks/useRoomDrawing";
+import { useWallDrawing } from "@/features/editor/hooks/useWallDrawing";
 import { useAppStore } from "@/store";
 import { CameraState, Opening as OpeningType, ViewMode, Wall as WallType } from "@/types/project.types";
 
