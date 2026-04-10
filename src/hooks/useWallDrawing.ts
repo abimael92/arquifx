@@ -1,70 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { ThreeEvent } from "@react-three/fiber";
 import { Plane, Vector3 } from "three";
 
-import { snapToGrid } from "@/lib/math/snapping";
+import { clampPointToTerrain } from "@/domains/terrain/services/terrain-bounds.service";
+import { createWallUseCase } from "@/domains/wall/use-cases/createWall.use-case";
+import {
+  buildWallPreviewMetrics,
+  snapAngleFromStart,
+  snapPointOnPlane,
+  wallLength,
+} from "@/domains/wall/services/wall-drawing.service";
 import { useAppStore } from "@/store";
 import { Vector3D } from "@/types/project.types";
 
-const WALL_COST_PER_METER = 120;
 const SNAP_SIZE = 0.1;
 const PRECISE_SNAP_SIZE = 0.01;
 const ANGLE_SNAP_DEG = 45;
 const PRECISE_ANGLE_SNAP_DEG = 15;
 const MIN_WALL_LENGTH = 0.1;
 const MIN_DRAG_COMMIT_LENGTH = 0.2;
-
-const snapValue = (value: number, snapSize: number) => snapToGrid(value, snapSize);
-
-const toRadians = (deg: number) => (deg * Math.PI) / 180;
-const toDegrees = (rad: number) => (rad * 180) / Math.PI;
-
-const toSnappedPoint = (point: Vector3, y: number, snapSize: number): Vector3D => ({
-  x: snapValue(point.x, snapSize),
-  y,
-  z: snapValue(point.z, snapSize),
-});
-
-const clampPointToTerrain = (point: Vector3D, width: number, length: number): { point: Vector3D; wasClamped: boolean } => {
-  const halfWidth = width / 2;
-  const halfLength = length / 2;
-  const clampedX = Math.min(halfWidth, Math.max(-halfWidth, point.x));
-  const clampedZ = Math.min(halfLength, Math.max(-halfLength, point.z));
-
-  return {
-    point: { ...point, x: clampedX, z: clampedZ },
-    wasClamped: clampedX !== point.x || clampedZ !== point.z,
-  };
-};
-
-const snapAngleFromStart = (startPoint: Vector3D, targetPoint: Vector3D, angleSnapDeg: number): Vector3D => {
-  const dx = targetPoint.x - startPoint.x;
-  const dz = targetPoint.z - startPoint.z;
-  const length = Math.sqrt(dx * dx + dz * dz);
-
-  if (length < 1e-6) {
-    return targetPoint;
-  }
-
-  const rawAngle = Math.atan2(dz, dx);
-  const snapStep = toRadians(angleSnapDeg);
-  const snappedAngle = Math.round(rawAngle / snapStep) * snapStep;
-
-  return {
-    x: startPoint.x + Math.cos(snappedAngle) * length,
-    y: startPoint.y,
-    z: startPoint.z + Math.sin(snappedAngle) * length,
-  };
-};
-
-interface WallPreviewMetrics {
-  lengthM: number;
-  angleDeg: number;
-  cost: number;
-}
 
 export function useWallDrawing() {
   const selectedTool = useAppStore((state) => state.selectedTool);
@@ -105,19 +61,18 @@ export function useWallDrawing() {
       const snapSize = isPrecision ? PRECISE_SNAP_SIZE : SNAP_SIZE;
       const angleSnap = isPrecision ? PRECISE_ANGLE_SNAP_DEG : ANGLE_SNAP_DEG;
 
-      const snapped = toSnappedPoint(intersection, baseY, snapSize);
-      const bounded = clampPointToTerrain(snapped, lot.width, lot.length);
+      const snapped = snapPointOnPlane({ x: intersection.x, y: baseY, z: intersection.z }, snapSize);
+      const bounded = clampPointToTerrain(snapped, { width: lot.width, length: lot.length });
       if (!start) {
         setTerrainViolation(bounded.wasClamped);
         return bounded.point;
       }
 
       const angleSnapped = snapAngleFromStart(start, bounded.point, angleSnap);
-      const finalBounded = clampPointToTerrain({
-        x: snapValue(angleSnapped.x, snapSize),
-        y: baseY,
-        z: snapValue(angleSnapped.z, snapSize),
-      }, lot.width, lot.length);
+      const finalBounded = clampPointToTerrain(
+        snapPointOnPlane({ x: angleSnapped.x, y: baseY, z: angleSnapped.z }, snapSize),
+        { width: lot.width, length: lot.length },
+      );
       setTerrainViolation(bounded.wasClamped || finalBounded.wasClamped);
       return finalBounded.point;
     },
@@ -175,9 +130,7 @@ export function useWallDrawing() {
         return;
       }
 
-      const dx = snapped.x - startPoint.x;
-      const dz = snapped.z - startPoint.z;
-      const length = Math.sqrt(dx * dx + dz * dz);
+      const length = wallLength(startPoint, snapped);
 
       if (length < MIN_DRAG_COMMIT_LENGTH) {
         cancelDrawing();
@@ -185,18 +138,12 @@ export function useWallDrawing() {
       }
 
       if (length >= MIN_WALL_LENGTH) {
-        addWall({
-          id: uuidv4(),
-          levelId: activeLevel?.id,
+        addWall(createWallUseCase({
           startPoint,
           endPoint: snapped,
+          levelId: activeLevel?.id,
           height: activeLevel?.height ?? 2.8,
-          thickness: 0.2,
-          materialType: "ladrillo",
-          layer: "muros",
-          isLoadBearing: false,
-          hasInsulation: false,
-        });
+        }));
       }
 
       cancelDrawing();
@@ -240,24 +187,12 @@ export function useWallDrawing() {
     }
   }, [isWallTool, selectFloor, selectOpening, selectWall, selectedFloorId, selectedOpeningId, selectedWallId]);
 
-  const previewMetrics = useMemo<WallPreviewMetrics | null>(() => {
+  const previewMetrics = useMemo(() => {
     if (!startPoint || !currentPoint) {
       return null;
     }
 
-    const dx = currentPoint.x - startPoint.x;
-    const dz = currentPoint.z - startPoint.z;
-    const lengthM = Math.sqrt(dx * dx + dz * dz);
-    if (lengthM < 1e-6) {
-      return null;
-    }
-
-    const angleDeg = ((toDegrees(Math.atan2(dz, dx)) % 360) + 360) % 360;
-    return {
-      lengthM,
-      angleDeg,
-      cost: lengthM * WALL_COST_PER_METER,
-    };
+    return buildWallPreviewMetrics(startPoint, currentPoint);
   }, [currentPoint, startPoint]);
 
   return {
