@@ -1,7 +1,15 @@
+"use client";
+
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 
+import { useAuth } from "@/hooks/useAuth";
+
 export function MarketingHeader() {
+  const { user, loading } = useAuth();
+  const ctaHref = user ? "/dashboard" : "/register";
+  const ctaLabel = user ? "Dashboard" : "Get Started";
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800/70 bg-slate-950/55 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6">
@@ -18,12 +26,18 @@ export function MarketingHeader() {
           <Link href="/dashboard" className="hover:text-cyan-300 transition">Dashboard</Link>
         </nav>
 
-        <Link
-          href="/register"
-          className="inline-flex items-center rounded-lg border border-cyan-400/70 bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/30"
-        >
-          Get Started
-        </Link>
+        {loading ? (
+          <span className="inline-flex items-center rounded-lg border border-slate-700/70 bg-slate-800/40 px-4 py-2 text-sm font-medium text-slate-300">
+            Loading...
+          </span>
+        ) : (
+          <Link
+            href={ctaHref}
+            className="inline-flex items-center rounded-lg border border-cyan-400/70 bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/30"
+          >
+            {ctaLabel}
+          </Link>
+        )}
       </div>
     </header>
   );

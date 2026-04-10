@@ -2,7 +2,7 @@
 
 import { OrbitControls, OrthographicCamera, PerspectiveCamera, useAnimations, useFBX, useGLTF } from "@react-three/drei";
 import { Canvas, ThreeEvent, useFrame, useLoader } from "@react-three/fiber";
-import { RefObject, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { RefObject, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Box3, BufferAttribute, BufferGeometry, Group, MOUSE, Mesh, MeshStandardMaterial, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -16,12 +16,9 @@ import { CameraState, Opening as OpeningType, ViewMode, Wall as WallType } from 
 import { Controls3D } from "./Controls3D";
 import { Floor } from "./Floor";
 import { Opening } from "./Opening";
+import { RealisticLighting } from "./RealisticLighting";
 import { Terrain } from "./Terrain";
 import { Wall } from "./Wall";
-
-const RealisticLighting = lazy(() =>
-  import("./RealisticLighting").then((module) => ({ default: module.RealisticLighting })),
-);
 
 type AvatarMotionState = "idle" | "walk" | "run";
 
@@ -1447,9 +1444,7 @@ export function Scene() {
         <Terrain width={lot.width} length={lot.length} violationActive={terrainViolation} />
 
         {viewMode === "realistic" || viewMode === "play" ? (
-          <Suspense fallback={null}>
-            <RealisticLighting shadowsEnabled={effectiveRealisticShadows} sunAzimuth={sunAzimuth} />
-          </Suspense>
+          <RealisticLighting shadowsEnabled={effectiveRealisticShadows} sunAzimuth={sunAzimuth} />
         ) : (
           <>
             <ambientLight intensity={viewMode === "blueprint" ? 0.2 : 0.45} />

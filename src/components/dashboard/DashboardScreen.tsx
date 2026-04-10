@@ -123,9 +123,11 @@ export function DashboardScreen() {
           </div>
         ) : null}
 
-        <div className="mt-8 text-sm text-slate-400">
-          Need to authenticate? <Link href="/login" className="text-cyan-300 hover:underline">Login</Link>
-        </div>
+        {!user ? (
+          <div className="mt-8 text-sm text-slate-400">
+            Need to authenticate? <Link href="/login" className="text-cyan-300 hover:underline">Login</Link>
+          </div>
+        ) : null}
       </section>
     </main>
     </ProtectedPageGuard>
