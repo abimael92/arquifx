@@ -6,8 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { ProtectedPageGuard } from "@/components/layout/ProtectedPageGuard";
 import { MarketingHeader } from "@/components/layout/MarketingHeader";
-import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { deleteProject, listUserProjects } from "@/lib/queries";
 import { useAppStore } from "@/store";
 
@@ -19,7 +20,7 @@ interface ProjectRow {
 
 export function DashboardScreen() {
   const router = useRouter();
-  const { user, loading } = useRequireAuth();
+  const { user } = useAuth();
   const newProject = useAppStore((state) => state.newProject);
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -49,15 +50,8 @@ export function DashboardScreen() {
     void run();
   }, [user]);
 
-  if (loading) {
-    return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">Loading...</main>;
-  }
-
-  if (!user) {
-    return null;
-  }
-
   return (
+    <ProtectedPageGuard>
     <main className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,#12233f_0%,#0b1220_35%,#070d18_100%)] text-slate-100">
       <MarketingHeader />
 
@@ -134,5 +128,6 @@ export function DashboardScreen() {
         </div>
       </section>
     </main>
+    </ProtectedPageGuard>
   );
 }

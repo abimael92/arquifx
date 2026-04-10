@@ -5,6 +5,7 @@ import { Download, Eye, Wrench } from "lucide-react";
 
 import { Scene } from "@/components/canvas/Scene";
 import { Button } from "@/components/atoms/Button";
+import { ProtectedPageGuard } from "@/components/layout/ProtectedPageGuard";
 import { MeasurementCard } from "@/components/molecules/MeasurementCard";
 import { BottomStatusBar } from "@/components/organisms/BottomStatusBar";
 import { MiniMap } from "@/components/organisms/MiniMap";
@@ -16,14 +17,11 @@ import { ProjectStatsCard } from "@/components/organisms/ProjectStatsCard";
 import { ViewSwitcher } from "@/components/organisms/ViewSwitcher";
 import { calculateProjectCost, calculateTotalFloorArea } from "@/core/math";
 import { useProjectAutoSave } from "@/hooks/useProjectAutoSave";
-import { useRequireAuth } from "@/hooks/useRequireAuth";
 import es from "@/locales/es.json";
 import { useAppStore } from "@/store";
 import { Project } from "@/types/project.types";
 
 export default function EditorPage() {
-  const { user, loading } = useRequireAuth();
-
   const selectedTool = useAppStore((state) => state.selectedTool);
   const walls = useAppStore((state) => state.walls);
   const floors = useAppStore((state) => state.floors);
@@ -131,19 +129,14 @@ export default function EditorPage() {
     };
   }, [showSavedToast]);
 
-  if (loading) {
-    return (
-      <main className="flex h-screen w-full items-center justify-center bg-fondo text-slate-200">
-        {es.auth.loading}
-      </main>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
   return (
+    <ProtectedPageGuard
+      loadingFallback={
+        <main className="flex h-screen w-full items-center justify-center bg-fondo text-slate-200">
+          {es.auth.loading}
+        </main>
+      }
+    >
     <main className="flex h-screen w-full flex-col bg-[radial-gradient(circle_at_20%_0%,#12233f_0%,#0b1220_35%,#070d18_100%)] text-slate-100">
       <div className="flex min-h-0 flex-1">
         {!isPlayMode ? <ModeSidebar /> : null}
@@ -231,5 +224,6 @@ export default function EditorPage() {
 
       {!projectInitialized ? <ProjectSetupModal /> : null}
     </main>
+    </ProtectedPageGuard>
   );
 }
