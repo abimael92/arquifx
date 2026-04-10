@@ -807,6 +807,7 @@ export function Scene() {
   } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
   const isPlayMode = viewMode === "play";
+  const isBuildMode = mode === "build";
   const isViewMode = mode === "view" || isPlayMode;
   const isObjectMode = activeMode === "object" || isOpeningTool;
   const isDemolishMode = activeMode === "demolish" || selectedTool === "Eliminar";
@@ -1542,11 +1543,11 @@ export function Scene() {
           />
         ) : null}
 
-        {previewLinePoints ? <PreviewLine points={previewLinePoints} /> : null}
-        {previewRectanglePoints ? <PreviewRectangle points={previewRectanglePoints} /> : null}
-        {previewRectanglePointsB ? <PreviewRectangle points={previewRectanglePointsB} /> : null}
+        {isBuildMode && previewLinePoints ? <PreviewLine points={previewLinePoints} /> : null}
+        {isBuildMode && previewRectanglePoints ? <PreviewRectangle points={previewRectanglePoints} /> : null}
+        {isBuildMode && previewRectanglePointsB ? <PreviewRectangle points={previewRectanglePointsB} /> : null}
 
-        {selectedWall && !isViewMode ? (
+        {selectedWall && isBuildMode ? (
           <Controls3D
             wall={selectedWall}
             orbitControlsRef={orbitControlsRef}
