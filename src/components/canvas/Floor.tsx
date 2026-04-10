@@ -52,8 +52,15 @@ export function Floor({ floor, isSelected, onSelect }: FloorProps) {
       }}
     >
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial color={isSelected ? "#facc15" : "#22d3ee"} transparent opacity={0.25} side={2} />
-      {isSelected ? <Outlines color="#facc15" thickness={3} transparent /> : null}
+      <meshStandardMaterial
+        color="#22d3ee"
+        transparent
+        opacity={isSelected ? 0.3 : 0.2}
+        emissive={isSelected ? "#0891b2" : "#000000"}
+        emissiveIntensity={isSelected ? 0.25 : 0}
+        side={2}
+      />
+      {isSelected ? <Outlines color="#22d3ee" thickness={2} transparent opacity={0.9} /> : null}
     </mesh>
   );
 }

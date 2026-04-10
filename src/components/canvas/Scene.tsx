@@ -11,7 +11,7 @@ import { useFloorDetection } from "@/hooks/useFloorDetection";
 import { useRoomDrawing } from "@/hooks/useRoomDrawing";
 import { useWallDrawing } from "@/hooks/useWallDrawing";
 import { useAppStore } from "@/store";
-import { CameraState, ViewMode, Wall as WallType } from "@/types/project.types";
+import { CameraState, Opening as OpeningType, ViewMode, Wall as WallType } from "@/types/project.types";
 
 import { Controls3D } from "./Controls3D";
 import { Floor } from "./Floor";
@@ -848,6 +848,20 @@ export function Scene() {
     [openings, visibleWalls],
   );
 
+  const openingsByWallId = useMemo(() => {
+    const map = new Map<string, OpeningType[]>();
+    visibleOpenings.forEach((opening) => {
+      const current = map.get(opening.wallId);
+      if (current) {
+        current.push(opening);
+        return;
+      }
+
+      map.set(opening.wallId, [opening]);
+    });
+    return map;
+  }, [visibleOpenings]);
+
   const getWallMetrics = (wall: WallType) => {
     const dx = wall.endPoint.x - wall.startPoint.x;
     const dz = wall.endPoint.z - wall.startPoint.z;
@@ -1403,6 +1417,7 @@ export function Scene() {
           <Wall
             key={wall.id}
             wall={wall}
+            openings={openingsByWallId.get(wall.id) ?? []}
             isSelected={wall.id === selectedWallId}
             onSelect={(wallId) => selectWall(wallId)}
             onWallPointerMove={handleWallPointerMove}
