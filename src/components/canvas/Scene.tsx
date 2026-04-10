@@ -2,26 +2,23 @@
 
 import { OrbitControls, OrthographicCamera, PerspectiveCamera, useAnimations, useFBX, useGLTF } from "@react-three/drei";
 import { Canvas, ThreeEvent, useFrame, useLoader } from "@react-three/fiber";
-import { RefObject, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { RefObject, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Box3, BufferAttribute, BufferGeometry, Group, MOUSE, Mesh, MeshStandardMaterial, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
-import { useFloorDetection } from "@/hooks/useFloorDetection";
-import { useRoomDrawing } from "@/hooks/useRoomDrawing";
-import { useWallDrawing } from "@/hooks/useWallDrawing";
+import { useFloorDetection } from "@/features/editor/hooks/useFloorDetection";
+import { useRoomDrawing } from "@/features/editor/hooks/useRoomDrawing";
+import { useWallDrawing } from "@/features/editor/hooks/useWallDrawing";
 import { useAppStore } from "@/store";
 import { CameraState, Opening as OpeningType, ViewMode, Wall as WallType } from "@/types/project.types";
 
 import { Controls3D } from "./Controls3D";
 import { Floor } from "./Floor";
 import { Opening } from "./Opening";
+import { RealisticLighting } from "./RealisticLighting";
 import { Terrain } from "./Terrain";
 import { Wall } from "./Wall";
-
-const RealisticLighting = lazy(() =>
-  import("./RealisticLighting").then((module) => ({ default: module.RealisticLighting })),
-);
 
 type AvatarMotionState = "idle" | "walk" | "run";
 
@@ -208,6 +205,8 @@ function PlayModeExternalRealisticAvatarObj() {
 function PlayModeController({
   active,
   lot,
+  walls,
+  openings,
   keysPressedRef,
   perspectiveCameraRef,
   orbitControlsRef,
@@ -216,6 +215,8 @@ function PlayModeController({
 }: {
   active: boolean;
   lot: { width: number; length: number };
+  walls: WallType[];
+  openings: OpeningType[];
   keysPressedRef: RefObject<Set<string>>;
   perspectiveCameraRef: RefObject<PerspectiveCameraImpl | null>;
   orbitControlsRef: RefObject<OrbitControlsImpl | null>;
@@ -237,6 +238,79 @@ function PlayModeController({
   const [externalAvatarType, setExternalAvatarType] = useState<"walking" | "walking-fbx" | "realistic-obj" | "obj" | "glb" | null>(null);
   const [motionState, setMotionState] = useState<AvatarMotionState>("idle");
   const motionStateRef = useRef<AvatarMotionState>("idle");
+  const collisionRadius = 0.28;
+  const PLAY_CAMERA_DISTANCE = 4;
+  const PLAY_CAMERA_HEIGHT = 2;
+  const PLAY_CAMERA_LOOK_AHEAD = 1.2;
+  const PLAY_CAMERA_MIN_BACK_DOT = -0.2;
+  const AVATAR_MODEL_YAW_OFFSET = 0;
+
+  const wallCollisionData = useMemo(() => {
+    return walls
+      .map((wall) => {
+        const dx = wall.endPoint.x - wall.startPoint.x;
+        const dz = wall.endPoint.z - wall.startPoint.z;
+        const length = Math.sqrt(dx * dx + dz * dz);
+        if (length <= 0.0001) {
+          return null;
+        }
+
+        const dirX = dx / length;
+        const dirZ = dz / length;
+        const normalX = -dirZ;
+        const normalZ = dirX;
+        const doorIntervals = openings
+          .filter((opening) => opening.wallId === wall.id && opening.type === "puerta")
+          .map((opening) => {
+            const halfWidth = opening.width / 2;
+            const start = Math.max(0, opening.positionFromStart - halfWidth);
+            const end = Math.min(length, opening.positionFromStart + halfWidth);
+            return { start, end };
+          });
+
+        return {
+          startX: wall.startPoint.x,
+          startZ: wall.startPoint.z,
+          length,
+          dirX,
+          dirZ,
+          normalX,
+          normalZ,
+          halfThickness: wall.thickness / 2,
+          doorIntervals,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+  }, [openings, walls]);
+
+  const collidesWithWalls = (pointX: number, pointZ: number) => {
+    for (const wall of wallCollisionData) {
+      const relX = pointX - wall.startX;
+      const relZ = pointZ - wall.startZ;
+      const along = relX * wall.dirX + relZ * wall.dirZ;
+      const lateral = relX * wall.normalX + relZ * wall.normalZ;
+
+      if (along < -collisionRadius || along > wall.length + collisionRadius) {
+        continue;
+      }
+
+      const touchesWallThickness = Math.abs(lateral) <= wall.halfThickness + collisionRadius;
+      if (!touchesWallThickness) {
+        continue;
+      }
+
+      const insideDoorSpan = wall.doorIntervals.some(
+        (interval) => along >= interval.start - collisionRadius && along <= interval.end + collisionRadius,
+      );
+      if (insideDoorSpan) {
+        continue;
+      }
+
+      return true;
+    }
+
+    return false;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -340,7 +414,19 @@ function PlayModeController({
 
     if (isMoving) {
       move.normalize().multiplyScalar(speed * delta);
-      avatarPositionRef.current.add(move);
+      const currentX = avatarPositionRef.current.x;
+      const currentZ = avatarPositionRef.current.z;
+      const candidateX = currentX + move.x;
+      const candidateZ = currentZ + move.z;
+
+      if (!collidesWithWalls(candidateX, candidateZ)) {
+        avatarPositionRef.current.x = candidateX;
+        avatarPositionRef.current.z = candidateZ;
+      } else if (!collidesWithWalls(candidateX, currentZ)) {
+        avatarPositionRef.current.x = candidateX;
+      } else if (!collidesWithWalls(currentX, candidateZ)) {
+        avatarPositionRef.current.z = candidateZ;
+      }
     }
 
     const halfW = lot.width / 2 - 0.35;
@@ -351,9 +437,8 @@ function PlayModeController({
     walkPhaseRef.current += (isMoving ? 6 : 2) * delta;
     const stride = isMoving ? Math.sin(walkPhaseRef.current) * 0.6 : 0;
     const armSwing = isMoving ? Math.sin(walkPhaseRef.current) * 0.45 : 0;
-    const modelFacingOffset = 0;
-    const visualYaw = avatarYawRef.current + modelFacingOffset;
-    const visualForward = new Vector3(Math.sin(visualYaw), 0, Math.cos(visualYaw));
+    const cameraForward = new Vector3(Math.sin(avatarYawRef.current), 0, Math.cos(avatarYawRef.current));
+    const visualYaw = avatarYawRef.current + AVATAR_MODEL_YAW_OFFSET;
 
     if (avatarGroupRef.current) {
       avatarGroupRef.current.position.set(
@@ -377,16 +462,37 @@ function PlayModeController({
       rightArmRef.current.rotation.x = armSwing;
     }
 
-    const cameraOffset = new Vector3(-visualForward.x * 4.0, 2.0, -visualForward.z * 4.0);
+    const cameraOffset = new Vector3(
+      -cameraForward.x * PLAY_CAMERA_DISTANCE,
+      PLAY_CAMERA_HEIGHT,
+      -cameraForward.z * PLAY_CAMERA_DISTANCE,
+    );
     camera.position.set(
       avatarPositionRef.current.x + cameraOffset.x,
       avatarPositionRef.current.y + cameraOffset.y,
       avatarPositionRef.current.z + cameraOffset.z,
     );
+
+    const avatarToCamera = new Vector3(
+      camera.position.x - avatarPositionRef.current.x,
+      0,
+      camera.position.z - avatarPositionRef.current.z,
+    );
+    if (avatarToCamera.lengthSq() > 0.0001) {
+      avatarToCamera.normalize();
+      if (avatarToCamera.dot(cameraForward) > PLAY_CAMERA_MIN_BACK_DOT) {
+        camera.position.set(
+          avatarPositionRef.current.x - cameraForward.x * PLAY_CAMERA_DISTANCE,
+          avatarPositionRef.current.y + PLAY_CAMERA_HEIGHT,
+          avatarPositionRef.current.z - cameraForward.z * PLAY_CAMERA_DISTANCE,
+        );
+      }
+    }
+
     controls.target.set(
-      avatarPositionRef.current.x + visualForward.x * 1.2,
+      avatarPositionRef.current.x + cameraForward.x * PLAY_CAMERA_LOOK_AHEAD,
       1.35,
-      avatarPositionRef.current.z + visualForward.z * 1.2,
+      avatarPositionRef.current.z + cameraForward.z * PLAY_CAMERA_LOOK_AHEAD,
     );
     controls.update();
 
@@ -1326,6 +1432,8 @@ export function Scene() {
         <PlayModeController
           active={isPlayMode}
           lot={{ width: lot.width, length: lot.length }}
+          walls={visibleWalls}
+          openings={visibleOpenings}
           keysPressedRef={keysPressedRef}
           perspectiveCameraRef={perspectiveCameraRef}
           orbitControlsRef={orbitControlsRef}
@@ -1336,9 +1444,7 @@ export function Scene() {
         <Terrain width={lot.width} length={lot.length} violationActive={terrainViolation} />
 
         {viewMode === "realistic" || viewMode === "play" ? (
-          <Suspense fallback={null}>
-            <RealisticLighting shadowsEnabled={effectiveRealisticShadows} sunAzimuth={sunAzimuth} />
-          </Suspense>
+          <RealisticLighting shadowsEnabled={effectiveRealisticShadows} sunAzimuth={sunAzimuth} />
         ) : (
           <>
             <ambientLight intensity={viewMode === "blueprint" ? 0.2 : 0.45} />

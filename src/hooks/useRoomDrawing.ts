@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { snapToGrid } from "@/lib/math/snapping";
+import { snapToGrid } from "@/core/math";
+import { clampPointToTerrain } from "@/domains/terrain/services/terrain-bounds.service";
 import { useAppStore } from "@/store";
 import { Vector3D } from "@/types/project.types";
 
@@ -24,18 +25,6 @@ const toSnappedPoint = (point: Vector3, y: number, snapSize: number): Vector3D =
   y,
   z: snapToGrid(point.z, snapSize),
 });
-
-const clampPointToTerrain = (point: Vector3D, width: number, length: number): { point: Vector3D; wasClamped: boolean } => {
-  const halfWidth = width / 2;
-  const halfLength = length / 2;
-  const clampedX = Math.min(halfWidth, Math.max(-halfWidth, point.x));
-  const clampedZ = Math.min(halfLength, Math.max(-halfLength, point.z));
-
-  return {
-    point: { ...point, x: clampedX, z: clampedZ },
-    wasClamped: clampedX !== point.x || clampedZ !== point.z,
-  };
-};
 
 export function useRoomDrawing() {
   const selectedTool = useAppStore((state) => state.selectedTool);
@@ -67,7 +56,7 @@ export function useRoomDrawing() {
 
       const snapSize = event.nativeEvent.ctrlKey ? PRECISE_SNAP_SIZE : SNAP_SIZE;
       const snapped = toSnappedPoint(intersection, baseY, snapSize);
-      const bounded = clampPointToTerrain(snapped, lot.width, lot.length);
+      const bounded = clampPointToTerrain(snapped, { width: lot.width, length: lot.length });
       setTerrainViolation(bounded.wasClamped);
       return bounded.point;
     },
