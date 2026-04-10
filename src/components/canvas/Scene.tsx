@@ -222,6 +222,10 @@ function PlayModeController({
   setCameraPosition: (position: { x: number; y: number; z: number }) => void;
   setCameraStateForMode: (mode: ViewMode, cameraState: Partial<CameraState>) => void;
 }) {
+  if (!active) {
+    return null;
+  }
+
   const avatarPositionRef = useRef(new Vector3(0, 0, 4));
   const avatarYawRef = useRef(0);
   const avatarGroupRef = useRef<Group>(null);
@@ -395,7 +399,7 @@ function PlayModeController({
   });
 
   return (
-    <group ref={avatarGroupRef} visible={active}>
+    <group ref={avatarGroupRef}>
       {externalAvatarType === "walking" ? (
         <Suspense fallback={null}>
           <PlayModeExternalWalkingAvatar motionState={motionState} />
