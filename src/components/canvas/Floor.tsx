@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { Outlines } from "@react-three/drei";
 import { Path, Shape, Vector2 } from "three";
 
 import { Floor as FloorType } from "@/types/project.types";
@@ -60,7 +59,6 @@ export function Floor({ floor, isSelected, onSelect }: FloorProps) {
         emissiveIntensity={isSelected ? 0.25 : 0}
         side={2}
       />
-      {isSelected ? <Outlines color="#22d3ee" thickness={2} transparent opacity={0.9} /> : null}
     </mesh>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { Outlines } from "@react-three/drei";
 import { ThreeEvent } from "@react-three/fiber";
 import { ExtrudeGeometry, Path, Shape, Vector2 } from "three";
 
@@ -126,8 +125,6 @@ export function Wall({
     >
       <primitive object={wallGeometry} attach="geometry" />
       <meshStandardMaterial color={wallColor} emissive={emissiveColor} emissiveIntensity={emissiveIntensity} />
-      {isHighlighted ? <Outlines color="#ef4444" thickness={3} transparent /> : null}
-      {!isHighlighted && isSelected ? <Outlines color="#22d3ee" thickness={2} transparent opacity={0.9} /> : null}
     </mesh>
   );
 }
