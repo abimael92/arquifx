@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ProtectedPageGuard } from "@/components/layout/ProtectedPageGuard";
 import { MarketingHeader } from "@/components/layout/MarketingHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { deleteProject, listUserProjects } from "@/lib/queries";
+import { deleteProject, listUserProjects, loadProject } from "@/lib/queries";
 import { useAppStore } from "@/store";
 
 interface ProjectRow {
@@ -22,6 +22,7 @@ export function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const newProject = useAppStore((state) => state.newProject);
+  const loadProjectIntoStore = useAppStore((state) => state.loadProject);
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [isBusy, setIsBusy] = useState(false);
@@ -112,7 +113,36 @@ export function DashboardScreen() {
                 </button>
               </div>
 
-              <div className="mt-4 text-xs text-slate-400">Project ready for editor session</div>
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setIsBusy(true);
+                      setError(null);
+
+                      const loadedProject = await loadProject(project.id);
+                      if (!loadedProject) {
+                        setError("Unable to load project");
+                        return;
+                      }
+
+                      loadProjectIntoStore(loadedProject);
+                      router.push("/editor");
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Unable to load project");
+                    } finally {
+                      setIsBusy(false);
+                    }
+                  }}
+                  className="inline-flex items-center rounded-md border border-cyan-400/60 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isBusy}
+                >
+                  Continue
+                </button>
+
+                <div className="text-xs text-slate-400">Project ready for editor session</div>
+              </div>
             </article>
           ))}
         </div>
