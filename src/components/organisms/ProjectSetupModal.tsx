@@ -6,10 +6,13 @@ import { useAppStore } from "@/store";
 
 export function ProjectSetupModal() {
   const initializeProjectSetup = useAppStore((state) => state.initializeProjectSetup);
+  const projectSettings = useAppStore((state) => state.projectSettings);
 
-  const [name, setName] = useState("");
-  const [terrainWidth, setTerrainWidth] = useState(20);
-  const [terrainLength, setTerrainLength] = useState(20);
+  const [name, setName] = useState(projectSettings.name || "");
+  const [terrainWidth, setTerrainWidth] = useState(projectSettings.terrainWidth || 20);
+  const [terrainLength, setTerrainLength] = useState(projectSettings.terrainLength || 20);
+  const [address, setAddress] = useState(projectSettings.address || "");
+  const [landValue, setLandValue] = useState<number | "">(projectSettings.landValue ?? "");
   const [maxHeight, setMaxHeight] = useState(9);
   const [maxFloors, setMaxFloors] = useState(3);
 
@@ -23,10 +26,17 @@ export function ProjectSetupModal() {
           className="mt-5 grid gap-4"
           onSubmit={(event) => {
             event.preventDefault();
+            const trimmedName = name.trim();
+            if (!trimmedName) {
+              return;
+            }
+
             initializeProjectSetup({
-              name: name.trim() || "Nuevo proyecto",
+              name: trimmedName,
               terrainWidth: Math.max(4, terrainWidth),
               terrainLength: Math.max(4, terrainLength),
+              address: address.trim() || "",
+              landValue: typeof landValue === "number" ? Math.max(0, landValue) : undefined,
               maxHeight: Math.max(3, maxHeight),
               maxFloors: Math.max(1, Math.floor(maxFloors)),
             });
@@ -68,6 +78,34 @@ export function ProjectSetupModal() {
                 onChange={(event) => setTerrainLength(Number(event.target.value))}
                 className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-slate-100 outline-none transition focus:border-cyan-400/80"
                 required
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid gap-1.5 text-sm text-slate-300">
+              Dirección <span className="text-xs text-slate-500">Opcional</span>
+              <input
+                type="text"
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                placeholder="Av. Siempre Viva 123"
+                className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-slate-100 outline-none transition focus:border-cyan-400/80"
+              />
+            </label>
+
+            <label className="grid gap-1.5 text-sm text-slate-300">
+              Valor del terreno <span className="text-xs text-slate-500">Opcional</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={landValue}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setLandValue(value === "" ? "" : Number(value));
+                }}
+                className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-slate-100 outline-none transition focus:border-cyan-400/80"
               />
             </label>
           </div>

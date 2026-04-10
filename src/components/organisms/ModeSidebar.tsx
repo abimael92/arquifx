@@ -7,7 +7,7 @@ import { BuildMode } from "@/types/project.types";
 
 const modeConfig: { mode: BuildMode; label: string; icon: JSX.Element; description: string }[] = [
   { mode: "view", label: "View", icon: <Eye className="h-5 w-5" />, description: "Navega sin editar" },
-  { mode: "build", label: "Build", icon: <Hammer className="h-5 w-5" />, description: "Muros, salas y suelos" },
+  { mode: "build", label: "Build", icon: <Hammer className="h-5 w-5" />, description: "Muros, cuartos y suelos" },
   { mode: "object", label: "Object", icon: <DoorOpen className="h-5 w-5" />, description: "Puertas y ventanas" },
   { mode: "demolish", label: "Demolish", icon: <Eraser className="h-5 w-5" />, description: "Borrar con click o arrastre" },
 ];
@@ -91,7 +91,7 @@ export function ModeSidebar() {
             onClick={() => setSelectedTool("Suelos")}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/40 px-2 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <SquareStack className="h-4 w-4" /> Salas
+            <SquareStack className="h-4 w-4" /> Cuartos
           </button>
           <button
             type="button"
