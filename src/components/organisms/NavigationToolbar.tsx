@@ -94,6 +94,12 @@ export function NavigationToolbar() {
                 target: { x: 0, y: 0, z: 0 },
                 zoom: 1,
               }
+          : viewMode === "play"
+            ? {
+                position: { x: 0, y: 1.65, z: 6 },
+                target: { x: 0, y: 1.65, z: 0 },
+                zoom: 1,
+              }
           : {
               position: { x: 0, y: 20, z: 0.1 },
               target: { x: 0, y: 0, z: 0 },

@@ -236,6 +236,12 @@ const defaultCameraStates: Record<ViewMode, CameraState> = {
     zoom: 1,
     rotation: { x: 0, y: 0, z: 0 },
   },
+  play: {
+    position: { x: 0, y: 1.65, z: 6 },
+    target: { x: 0, y: 1.65, z: 0 },
+    zoom: 1,
+    rotation: { x: 0, y: 0, z: 0 },
+  },
 };
 const defaultLevelId = "level-0";
 const defaultLevels: Level[] = [
@@ -263,6 +269,8 @@ const defaultEditorProjectSettings: EditorProjectSettings = {
   name: "",
   terrainWidth: defaultLot.width,
   terrainLength: defaultLot.length,
+  address: "",
+  landValue: undefined,
   maxHeight: defaultLot.maxHeight,
   maxFloors: defaultLot.maxLevels,
 };
@@ -958,6 +966,11 @@ export const useAppStore = create<StoreState>((set, get) => {
           name: settings.name.trim() || "Nuevo proyecto",
           terrainWidth: lot.width,
           terrainLength: lot.length,
+          address: settings.address?.trim() || "",
+          landValue:
+            typeof settings.landValue === "number" && Number.isFinite(settings.landValue)
+              ? Math.max(0, settings.landValue)
+              : undefined,
           maxHeight: lot.maxHeight,
           maxFloors: lot.maxLevels,
         };
@@ -1086,6 +1099,8 @@ export const useAppStore = create<StoreState>((set, get) => {
           name: project.name,
           terrainWidth: project.lot?.width ?? defaultLot.width,
           terrainLength: project.lot?.length ?? defaultLot.length,
+          address: "",
+          landValue: undefined,
           maxHeight: project.lot?.maxHeight ?? defaultLot.maxHeight,
           maxFloors: project.lot?.maxLevels ?? defaultLot.maxLevels,
         },
@@ -1099,20 +1114,8 @@ export const useAppStore = create<StoreState>((set, get) => {
 
     newProject: (name) => {
       applyWithHistory((state) => {
-        const project = buildProject(
-          uuidv4(),
-          name ?? "Nuevo proyecto",
-          [],
-          [],
-          [],
-          [],
-          defaultLevels,
-          defaultLot,
-          { ...defaultSettings, showGrid: state.showGrid },
-        );
-
         return {
-          currentProject: project,
+          currentProject: null,
           walls: [],
           floors: [],
           openings: [],
@@ -1130,10 +1133,10 @@ export const useAppStore = create<StoreState>((set, get) => {
           realisticShadows: true,
           sunAzimuth: Math.PI / 4,
           terrainViolation: false,
-          projectInitialized: true,
+          projectInitialized: false,
           projectSettings: {
             ...defaultEditorProjectSettings,
-            name: project.name,
+            name: name?.trim() || "",
           },
           mode: "view",
           activeMode: "view",

@@ -35,12 +35,17 @@ export default function EditorPage() {
   const cameraPosition = useAppStore((state) => state.cameraPosition);
   const currentProject = useAppStore((state) => state.currentProject);
   const activeMode = useAppStore((state) => state.activeMode);
+  const viewMode = useAppStore((state) => state.viewMode);
   const projectInitialized = useAppStore((state) => state.projectInitialized);
   const activeLevelId = useAppStore((state) => state.activeLevelId);
   const levels = useAppStore((state) => state.levels);
   const openingRailConstrainedThresholdM = useAppStore((state) => state.openingRailConstrainedThresholdM);
+  const setMode = useAppStore((state) => state.setMode);
+  const setActiveMode = useAppStore((state) => state.setActiveMode);
+  const setSelectedTool = useAppStore((state) => state.setSelectedTool);
 
   const [showSavedToast, setShowSavedToast] = useState(false);
+  const isPlayMode = viewMode === "play";
 
   const selectedWall = walls.find((wall) => wall.id === selectedWallId) ?? null;
   const selectedOpening = openings.find((opening) => opening.id === selectedOpeningId) ?? null;
@@ -102,6 +107,16 @@ export default function EditorPage() {
   });
 
   useEffect(() => {
+    if (!isPlayMode) {
+      return;
+    }
+
+    setMode("view");
+    setActiveMode("view");
+    setSelectedTool("Seleccionar");
+  }, [isPlayMode, setActiveMode, setMode, setSelectedTool]);
+
+  useEffect(() => {
     if (!showSavedToast) {
       return;
     }
@@ -130,7 +145,7 @@ export default function EditorPage() {
   return (
     <main className="flex h-screen w-full flex-col bg-[radial-gradient(circle_at_20%_0%,#12233f_0%,#0b1220_35%,#070d18_100%)] text-slate-100">
       <div className="flex min-h-0 flex-1">
-        <ModeSidebar />
+        {!isPlayMode ? <ModeSidebar /> : null}
 
         <section className="relative flex-1 border-r border-slate-800/90">
           <ViewSwitcher />
@@ -146,7 +161,8 @@ export default function EditorPage() {
           <Scene />
         </section>
 
-        <aside className="w-80 shrink-0 border-l border-slate-800/90 bg-[linear-gradient(180deg,#111d33_0%,#0c1525_35%,#09101d_100%)] p-5">
+        {!isPlayMode ? (
+          <aside className="w-80 shrink-0 border-l border-slate-800/90 bg-[linear-gradient(180deg,#111d33_0%,#0c1525_35%,#09101d_100%)] p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-300">{es.inspector.title}</h2>
             <Button variant="secondary" onClick={handleExportProject}>
@@ -185,7 +201,8 @@ export default function EditorPage() {
             />
           </div>
 
-        </aside>
+          </aside>
+        ) : null}
       </div>
 
       <BottomStatusBar

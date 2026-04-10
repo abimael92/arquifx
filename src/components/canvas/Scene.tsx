@@ -1,16 +1,17 @@
 "use client";
 
-import { OrbitControls, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
-import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
+import { OrbitControls, OrthographicCamera, PerspectiveCamera, useAnimations, useFBX, useGLTF } from "@react-three/drei";
+import { Canvas, ThreeEvent, useFrame, useLoader } from "@react-three/fiber";
 import { RefObject, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { BufferAttribute, BufferGeometry, MOUSE, Mesh, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
+import { Box3, BufferAttribute, BufferGeometry, Group, MOUSE, Mesh, MeshStandardMaterial, OrthographicCamera as OrthographicCameraImpl, PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from "three";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { useFloorDetection } from "@/hooks/useFloorDetection";
 import { useRoomDrawing } from "@/hooks/useRoomDrawing";
 import { useWallDrawing } from "@/hooks/useWallDrawing";
 import { useAppStore } from "@/store";
-import { CameraState, ViewMode, Wall as WallType } from "@/types/project.types";
+import { CameraState, Opening as OpeningType, ViewMode, Wall as WallType } from "@/types/project.types";
 
 import { Controls3D } from "./Controls3D";
 import { Floor } from "./Floor";
@@ -21,6 +22,438 @@ import { Wall } from "./Wall";
 const RealisticLighting = lazy(() =>
   import("./RealisticLighting").then((module) => ({ default: module.RealisticLighting })),
 );
+
+type AvatarMotionState = "idle" | "walk" | "run";
+
+function resolveAvatarClipName(names: string[], motionState: AvatarMotionState) {
+  const lowerNames = names.map((name) => name.toLowerCase());
+  const findBy = (tests: string[]) => names[lowerNames.findIndex((name) => tests.some((test) => name.includes(test)))];
+
+  if (motionState === "run") {
+    return findBy(["run", "jog", "sprint"]);
+  }
+
+  if (motionState === "walk") {
+    return findBy(["walk", "locomotion", "move"]);
+  }
+
+  return findBy(["idle", "rest", "breath"]);
+}
+
+function PlayModeExternalAvatar({ motionState }: { motionState: AvatarMotionState }) {
+  const groupRef = useRef<Group>(null);
+  const { scene, animations } = useGLTF("/models/male_avatar.glb");
+  const { actions, names } = useAnimations(animations, groupRef);
+
+  useEffect(() => {
+    const activeClipName =
+      resolveAvatarClipName(names, motionState) || resolveAvatarClipName(names, "walk") || resolveAvatarClipName(names, "idle") || names[0];
+    if (!activeClipName) {
+      return;
+    }
+
+    const activeAction = actions[activeClipName];
+    if (!activeAction) {
+      return;
+    }
+
+    activeAction.reset().fadeIn(0.2).play();
+    return () => {
+      activeAction.fadeOut(0.2);
+    };
+  }, [actions, names, motionState]);
+
+  return (
+    <group ref={groupRef}>
+      <primitive object={scene} position={[0, 0, 0]} scale={0.95} castShadow receiveShadow />
+    </group>
+  );
+}
+
+function PlayModeExternalWalkingAvatar({ motionState }: { motionState: AvatarMotionState }) {
+  const groupRef = useRef<Group>(null);
+  const { scene, animations } = useGLTF("/models/walking.glb");
+  const { actions, names } = useAnimations(animations, groupRef);
+
+  useEffect(() => {
+    const activeClipName =
+      resolveAvatarClipName(names, motionState) || resolveAvatarClipName(names, "walk") || resolveAvatarClipName(names, "idle") || names[0];
+    if (!activeClipName) {
+      return;
+    }
+
+    const activeAction = actions[activeClipName];
+    if (!activeAction) {
+      return;
+    }
+
+    activeAction.reset().fadeIn(0.2).play();
+    return () => {
+      activeAction.fadeOut(0.2);
+    };
+  }, [actions, names, motionState]);
+
+  return (
+    <group ref={groupRef}>
+      <primitive object={scene} position={[0, 0, 0]} scale={0.95} castShadow receiveShadow />
+    </group>
+  );
+}
+
+function PlayModeExternalWalkingFbxAvatar({ motionState }: { motionState: AvatarMotionState }) {
+  const groupRef = useRef<Group>(null);
+  const object = useFBX("/models/Walking.fbx");
+  const { actions, names } = useAnimations(object.animations ?? [], groupRef);
+
+  useEffect(() => {
+    object.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!mesh.isMesh) {
+        return;
+      }
+
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    });
+  }, [object]);
+
+  useEffect(() => {
+    const activeClipName =
+      resolveAvatarClipName(names, motionState) || resolveAvatarClipName(names, "walk") || resolveAvatarClipName(names, "idle") || names[0];
+    if (!activeClipName) {
+      return;
+    }
+
+    const activeAction = actions[activeClipName];
+    if (!activeAction) {
+      return;
+    }
+
+    activeAction.reset().fadeIn(0.2).play();
+    return () => {
+      activeAction.fadeOut(0.2);
+    };
+  }, [actions, names, motionState]);
+
+  return (
+    <group ref={groupRef}>
+      <primitive object={object} position={[0, 0, 0]} scale={0.014} />
+    </group>
+  );
+}
+
+function PlayModeExternalAvatarObj() {
+  const object = useLoader(OBJLoader, "/models/base-body-mesh.obj");
+
+  useEffect(() => {
+    object.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!mesh.isMesh) {
+        return;
+      }
+
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (!Array.isArray(mesh.material)) {
+        mesh.material = new MeshStandardMaterial({ color: "#cbd5e1", roughness: 0.65, metalness: 0.06 });
+      }
+    });
+  }, [object]);
+
+  return <primitive object={object} position={[0, -0.9, 0]} scale={0.22} />;
+}
+
+function PlayModeExternalRealisticAvatarObj() {
+  const object = useLoader(OBJLoader, "/Realistic_White_Male/Realistic_White_Male_Low_Poly.obj");
+
+  const placement = useMemo(() => {
+    const box = new Box3().setFromObject(object);
+    const size = new Vector3();
+    box.getSize(size);
+
+    const targetHeight = 1.78;
+    const scale = size.y > 0 ? targetHeight / size.y : 0.02;
+    const centeredX = -((box.min.x + box.max.x) * 0.5) * scale;
+    const centeredZ = -((box.min.z + box.max.z) * 0.5) * scale;
+    const groundedY = -box.min.y * scale;
+
+    return { scale, centeredX, centeredZ, groundedY };
+  }, [object]);
+
+  useEffect(() => {
+    object.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!mesh.isMesh) {
+        return;
+      }
+
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (!Array.isArray(mesh.material)) {
+        mesh.material = new MeshStandardMaterial({ color: "#e5e7eb", roughness: 0.58, metalness: 0.03 });
+      }
+    });
+  }, [object]);
+
+  return (
+    <primitive
+      object={object}
+      position={[placement.centeredX, placement.groundedY, placement.centeredZ]}
+      rotation={[0, 0, 0]}
+      scale={placement.scale}
+    />
+  );
+}
+
+function PlayModeController({
+  active,
+  lot,
+  keysPressedRef,
+  perspectiveCameraRef,
+  orbitControlsRef,
+  setCameraPosition,
+  setCameraStateForMode,
+}: {
+  active: boolean;
+  lot: { width: number; length: number };
+  keysPressedRef: RefObject<Set<string>>;
+  perspectiveCameraRef: RefObject<PerspectiveCameraImpl | null>;
+  orbitControlsRef: RefObject<OrbitControlsImpl | null>;
+  setCameraPosition: (position: { x: number; y: number; z: number }) => void;
+  setCameraStateForMode: (mode: ViewMode, cameraState: Partial<CameraState>) => void;
+}) {
+  if (!active) {
+    return null;
+  }
+
+  const avatarPositionRef = useRef(new Vector3(0, 0, 4));
+  const avatarYawRef = useRef(0);
+  const avatarGroupRef = useRef<Group>(null);
+  const leftArmRef = useRef<Mesh>(null);
+  const rightArmRef = useRef<Mesh>(null);
+  const leftLegRef = useRef<Mesh>(null);
+  const rightLegRef = useRef<Mesh>(null);
+  const walkPhaseRef = useRef(0);
+  const [externalAvatarType, setExternalAvatarType] = useState<"walking" | "walking-fbx" | "realistic-obj" | "obj" | "glb" | null>(null);
+  const [motionState, setMotionState] = useState<AvatarMotionState>("idle");
+  const motionStateRef = useRef<AvatarMotionState>("idle");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAvatarModel = async () => {
+      try {
+        const walkingResponse = await fetch("/models/walking.glb", { method: "HEAD" });
+        if (walkingResponse.ok) {
+          if (!cancelled) {
+            setExternalAvatarType("walking");
+          }
+          return;
+        }
+
+        const walkingFbxResponse = await fetch("/models/Walking.fbx", { method: "HEAD" });
+        if (walkingFbxResponse.ok) {
+          if (!cancelled) {
+            setExternalAvatarType("walking-fbx");
+          }
+          return;
+        }
+
+        const realisticObjResponse = await fetch("/Realistic_White_Male/Realistic_White_Male_Low_Poly.obj", { method: "HEAD" });
+        if (realisticObjResponse.ok) {
+          if (!cancelled) {
+            setExternalAvatarType("realistic-obj");
+          }
+          return;
+        }
+
+        const objResponse = await fetch("/models/base-body-mesh.obj", { method: "HEAD" });
+        if (objResponse.ok) {
+          if (!cancelled) {
+            setExternalAvatarType("obj");
+          }
+          return;
+        }
+
+        const glbResponse = await fetch("/models/male_avatar.glb", { method: "HEAD" });
+        if (!cancelled) {
+          setExternalAvatarType(glbResponse.ok ? "glb" : null);
+        }
+      } catch {
+        if (!cancelled) {
+          setExternalAvatarType(null);
+        }
+      }
+    };
+
+    void checkAvatarModel();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useFrame((_, delta) => {
+    if (!active) {
+      return;
+    }
+
+    const camera = perspectiveCameraRef.current;
+    const controls = orbitControlsRef.current;
+    if (!camera || !controls) {
+      return;
+    }
+
+    const speed = keysPressedRef.current?.has("shift") ? 4.6 : 2.8;
+    const yawSpeed = 1.6;
+
+    if (keysPressedRef.current?.has("arrowleft") || keysPressedRef.current?.has("q")) {
+      avatarYawRef.current += yawSpeed * delta;
+    }
+    if (keysPressedRef.current?.has("arrowright") || keysPressedRef.current?.has("e")) {
+      avatarYawRef.current -= yawSpeed * delta;
+    }
+
+    const forward = new Vector3(Math.sin(avatarYawRef.current), 0, Math.cos(avatarYawRef.current));
+    const right = new Vector3(forward.z, 0, -forward.x);
+    const move = new Vector3();
+
+    if (keysPressedRef.current?.has("w") || keysPressedRef.current?.has("arrowup")) {
+      move.add(forward);
+    }
+    if (keysPressedRef.current?.has("s") || keysPressedRef.current?.has("arrowdown")) {
+      move.addScaledVector(forward, -1);
+    }
+    if (keysPressedRef.current?.has("a")) {
+      move.addScaledVector(right, -1);
+    }
+    if (keysPressedRef.current?.has("d")) {
+      move.add(right);
+    }
+
+    const isMoving = move.lengthSq() > 0;
+    const nextMotionState: AvatarMotionState = isMoving ? (keysPressedRef.current?.has("shift") ? "run" : "walk") : "idle";
+    if (motionStateRef.current !== nextMotionState) {
+      motionStateRef.current = nextMotionState;
+      setMotionState(nextMotionState);
+    }
+
+    if (isMoving) {
+      move.normalize().multiplyScalar(speed * delta);
+      avatarPositionRef.current.add(move);
+    }
+
+    const halfW = lot.width / 2 - 0.35;
+    const halfL = lot.length / 2 - 0.35;
+    avatarPositionRef.current.x = Math.min(halfW, Math.max(-halfW, avatarPositionRef.current.x));
+    avatarPositionRef.current.z = Math.min(halfL, Math.max(-halfL, avatarPositionRef.current.z));
+
+    walkPhaseRef.current += (isMoving ? 6 : 2) * delta;
+    const stride = isMoving ? Math.sin(walkPhaseRef.current) * 0.6 : 0;
+    const armSwing = isMoving ? Math.sin(walkPhaseRef.current) * 0.45 : 0;
+    const modelFacingOffset = 0;
+    const visualYaw = avatarYawRef.current + modelFacingOffset;
+    const visualForward = new Vector3(Math.sin(visualYaw), 0, Math.cos(visualYaw));
+
+    if (avatarGroupRef.current) {
+      avatarGroupRef.current.position.set(
+        avatarPositionRef.current.x,
+        isMoving ? Math.abs(Math.sin(walkPhaseRef.current * 2)) * 0.04 : 0,
+        avatarPositionRef.current.z,
+      );
+      avatarGroupRef.current.rotation.y = visualYaw;
+    }
+
+    if (leftLegRef.current) {
+      leftLegRef.current.rotation.x = stride;
+    }
+    if (rightLegRef.current) {
+      rightLegRef.current.rotation.x = -stride;
+    }
+    if (leftArmRef.current) {
+      leftArmRef.current.rotation.x = -armSwing;
+    }
+    if (rightArmRef.current) {
+      rightArmRef.current.rotation.x = armSwing;
+    }
+
+    const cameraOffset = new Vector3(-visualForward.x * 4.0, 2.0, -visualForward.z * 4.0);
+    camera.position.set(
+      avatarPositionRef.current.x + cameraOffset.x,
+      avatarPositionRef.current.y + cameraOffset.y,
+      avatarPositionRef.current.z + cameraOffset.z,
+    );
+    controls.target.set(
+      avatarPositionRef.current.x + visualForward.x * 1.2,
+      1.35,
+      avatarPositionRef.current.z + visualForward.z * 1.2,
+    );
+    controls.update();
+
+    setCameraPosition({ x: camera.position.x, y: camera.position.y, z: camera.position.z });
+    setCameraStateForMode("play", {
+      position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+      target: { x: controls.target.x, y: controls.target.y, z: controls.target.z },
+      zoom: camera.zoom,
+    });
+  });
+
+  return (
+    <group ref={avatarGroupRef}>
+      {externalAvatarType === "walking" ? (
+        <Suspense fallback={null}>
+          <PlayModeExternalWalkingAvatar motionState={motionState} />
+        </Suspense>
+      ) : externalAvatarType === "walking-fbx" ? (
+        <Suspense fallback={null}>
+          <PlayModeExternalWalkingFbxAvatar motionState={motionState} />
+        </Suspense>
+      ) : externalAvatarType === "realistic-obj" ? (
+        <Suspense fallback={null}>
+          <PlayModeExternalRealisticAvatarObj />
+        </Suspense>
+      ) : externalAvatarType === "obj" ? (
+        <Suspense fallback={null}>
+          <PlayModeExternalAvatarObj />
+        </Suspense>
+      ) : externalAvatarType === "glb" ? (
+        <Suspense fallback={null}>
+          <PlayModeExternalAvatar motionState={motionState} />
+        </Suspense>
+      ) : (
+        <>
+          <mesh position={[0, 1, 0]} castShadow>
+            <boxGeometry args={[0.56, 1.1, 0.34]} />
+            <meshStandardMaterial color="#2563eb" roughness={0.4} metalness={0.1} />
+          </mesh>
+
+          <mesh position={[0, 1.9, 0]} castShadow>
+            <sphereGeometry args={[0.22, 20, 20]} />
+            <meshStandardMaterial color="#f1c7a3" roughness={0.65} metalness={0.02} />
+          </mesh>
+
+          <mesh ref={leftArmRef} position={[-0.35, 1.2, 0]} castShadow>
+            <boxGeometry args={[0.16, 0.68, 0.16]} />
+            <meshStandardMaterial color="#0f172a" roughness={0.5} metalness={0.1} />
+          </mesh>
+          <mesh ref={rightArmRef} position={[0.35, 1.2, 0]} castShadow>
+            <boxGeometry args={[0.16, 0.68, 0.16]} />
+            <meshStandardMaterial color="#0f172a" roughness={0.5} metalness={0.1} />
+          </mesh>
+
+          <mesh ref={leftLegRef} position={[-0.14, 0.38, 0]} castShadow>
+            <boxGeometry args={[0.2, 0.72, 0.2]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.1} />
+          </mesh>
+          <mesh ref={rightLegRef} position={[0.14, 0.38, 0]} castShadow>
+            <boxGeometry args={[0.2, 0.72, 0.2]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.1} />
+          </mesh>
+        </>
+      )}
+    </group>
+  );
+}
 
 function PreviewLine({ points }: { points: [number, number, number, number, number, number] }) {
   const geometry = useMemo(() => {
@@ -95,7 +528,7 @@ function SceneFrameController({
       }
     }
 
-    if (cameraControlMode === "free" && viewMode !== "blueprint") {
+    if (cameraControlMode === "free" && viewMode !== "blueprint" && viewMode !== "play") {
       const speed = keysPressedRef.current?.has("shift") ? 10 : 4;
       const forward = new Vector3().subVectors(controls.target, activeCamera.position).setY(0).normalize();
       const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
@@ -377,7 +810,9 @@ export function Scene() {
     onCanvasPointerUp: onRoomPointerUp,
   } = useRoomDrawing();
   const isOpeningTool = selectedTool === "Puertas" || selectedTool === "Ventanas";
-  const isViewMode = mode === "view";
+  const isPlayMode = viewMode === "play";
+  const isBuildMode = mode === "build";
+  const isViewMode = mode === "view" || isPlayMode;
   const isObjectMode = activeMode === "object" || isOpeningTool;
   const isDemolishMode = activeMode === "demolish" || selectedTool === "Eliminar";
   const [isLowPerformanceMode, setIsLowPerformanceMode] = useState(false);
@@ -417,6 +852,20 @@ export function Scene() {
     [openings, visibleWalls],
   );
 
+  const openingsByWallId = useMemo(() => {
+    const map = new Map<string, OpeningType[]>();
+    visibleOpenings.forEach((opening) => {
+      const current = map.get(opening.wallId);
+      if (current) {
+        current.push(opening);
+        return;
+      }
+
+      map.set(opening.wallId, [opening]);
+    });
+    return map;
+  }, [visibleOpenings]);
+
   const getWallMetrics = (wall: WallType) => {
     const dx = wall.endPoint.x - wall.startPoint.x;
     const dz = wall.endPoint.z - wall.startPoint.z;
@@ -445,7 +894,7 @@ export function Scene() {
 
   const getViewModeHint = (intent: "general" | "build" | "object" | "demolish" = "general") => {
     if (intent === "build") {
-      return "Modo View activo: cambia a Build > Muros/Salas para editar";
+      return "Modo View activo: cambia a Build > Muros/Cuartos para editar";
     }
 
     if (intent === "object") {
@@ -874,9 +1323,19 @@ export function Scene() {
           }}
         />
 
+        <PlayModeController
+          active={isPlayMode}
+          lot={{ width: lot.width, length: lot.length }}
+          keysPressedRef={keysPressedRef}
+          perspectiveCameraRef={perspectiveCameraRef}
+          orbitControlsRef={orbitControlsRef}
+          setCameraPosition={setCameraPosition}
+          setCameraStateForMode={setCameraStateForMode}
+        />
+
         <Terrain width={lot.width} length={lot.length} violationActive={terrainViolation} />
 
-        {viewMode === "realistic" ? (
+        {viewMode === "realistic" || viewMode === "play" ? (
           <Suspense fallback={null}>
             <RealisticLighting shadowsEnabled={effectiveRealisticShadows} sunAzimuth={sunAzimuth} />
           </Suspense>
@@ -962,6 +1421,7 @@ export function Scene() {
           <Wall
             key={wall.id}
             wall={wall}
+            openings={openingsByWallId.get(wall.id) ?? []}
             isSelected={wall.id === selectedWallId}
             onSelect={(wallId) => selectWall(wallId)}
             onWallPointerMove={handleWallPointerMove}
@@ -1102,11 +1562,11 @@ export function Scene() {
           />
         ) : null}
 
-        {previewLinePoints ? <PreviewLine points={previewLinePoints} /> : null}
-        {previewRectanglePoints ? <PreviewRectangle points={previewRectanglePoints} /> : null}
-        {previewRectanglePointsB ? <PreviewRectangle points={previewRectanglePointsB} /> : null}
+        {isBuildMode && previewLinePoints ? <PreviewLine points={previewLinePoints} /> : null}
+        {isBuildMode && previewRectanglePoints ? <PreviewRectangle points={previewRectanglePoints} /> : null}
+        {isBuildMode && previewRectanglePointsB ? <PreviewRectangle points={previewRectanglePointsB} /> : null}
 
-        {selectedWall && !isViewMode ? (
+        {selectedWall && isBuildMode ? (
           <Controls3D
             wall={selectedWall}
             orbitControlsRef={orbitControlsRef}
@@ -1119,7 +1579,7 @@ export function Scene() {
         <OrbitControls
           ref={orbitControlsRef}
           makeDefault
-          enabled={cameraControlMode === "orbit"}
+          enabled={cameraControlMode === "orbit" && !isPlayMode}
           enableZoom
           enablePan
           enableDamping
@@ -1189,6 +1649,12 @@ export function Scene() {
       {viewMode === "realistic" && isLowPerformanceMode ? (
         <div className="pointer-events-none absolute right-5 top-48 rounded-lg border border-amber-500/50 bg-amber-950/70 px-3 py-2 text-xs text-amber-100">
           Rendimiento bajo: sombras reducidas automáticamente
+        </div>
+      ) : null}
+
+      {isPlayMode ? (
+        <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-lg border border-cyan-500/50 bg-slate-950/80 px-3 py-2 text-xs text-cyan-100">
+          Play mode: W/A/S/D mover · Q/E rotar · Shift correr
         </div>
       ) : null}
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { Outlines } from "@react-three/drei";
 import { ThreeEvent } from "@react-three/fiber";
 
 import { Opening as OpeningType, Wall } from "@/types/project.types";
@@ -49,7 +48,9 @@ export function Opening({
   }, [opening, wall]);
 
   const baseColor = opening.type === "puerta" ? "#8b5a2b" : "#2563eb";
-  const color = isHighlighted ? "#ef4444" : isSelected ? "#facc15" : baseColor;
+  const color = isHighlighted ? "#ef4444" : baseColor;
+  const emissiveColor = isHighlighted ? "#7f1d1d" : isSelected ? "#0891b2" : "#000000";
+  const emissiveIntensity = isHighlighted ? 0.45 : isSelected ? 0.28 : 0;
 
   return (
     <mesh
@@ -76,10 +77,14 @@ export function Opening({
         onSelect(opening.id);
       }}
     >
-      <boxGeometry args={[opening.width, opening.height, wall.thickness * 1.05]} />
-      <meshStandardMaterial color={color} transparent opacity={0.45} />
-      {isHighlighted ? <Outlines color="#ef4444" thickness={3} transparent /> : null}
-      {!isHighlighted && isSelected ? <Outlines color="#facc15" thickness={3} transparent /> : null}
+      <boxGeometry args={[opening.width, opening.height, Math.max(0.06, wall.thickness * 0.72)]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={emissiveColor}
+        emissiveIntensity={emissiveIntensity}
+        transparent
+        opacity={opening.type === "ventana" ? 0.45 : 0.85}
+      />
     </mesh>
   );
 }
